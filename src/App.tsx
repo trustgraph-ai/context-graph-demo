@@ -1,12 +1,82 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, MouseEvent } from "react";
 
 // ═══════════════════════════════════════════════════════════════════
 // TRUSTGRAPH RETAIL INTELLIGENCE DEMO
 // Ontology-Driven Context Graph: Consumer × Agent × Retail × Brand
 // ═══════════════════════════════════════════════════════════════════
 
+// ── Type Definitions ─────────────────────────────────────────────
+type DomainKey = "consumer" | "brand" | "retail" | "agent";
+
+interface EntityProps {
+  [key: string]: string | number;
+}
+
+interface Subclass {
+  id: string;
+  label: string;
+  props: EntityProps;
+}
+
+interface OntologyDomain {
+  label: string;
+  color: string;
+  glow: string;
+  icon: string;
+  description: string;
+  properties: string[];
+  subclasses: Subclass[];
+}
+
+type OntologyType = Record<DomainKey, OntologyDomain>;
+
+interface Relationship {
+  from: string;
+  to: string;
+  predicate: string;
+  strength: number;
+  domain: [DomainKey, DomainKey];
+}
+
+interface DemoQuery {
+  q: string;
+  thinking: string[];
+  answer: string;
+  entities: string[];
+  triples: number;
+}
+
+interface Entity extends Subclass {
+  domain: DomainKey;
+  color: string;
+  glow: string;
+  icon: string;
+}
+
+interface GraphNode extends Entity {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  targetX: number;
+  targetY: number;
+  r: number;
+}
+
+interface GraphCanvasProps {
+  highlightedEntities: string[];
+  onNodeClick: (node: GraphNode) => void;
+  activeFilter: DomainKey | null;
+}
+
+interface TypewriterProps {
+  text: string;
+  speed?: number;
+  onDone?: () => void;
+}
+
 // ── Ontology Schema ──────────────────────────────────────────────
-const ONTOLOGY = {
+const ONTOLOGY: OntologyType = {
   consumer: {
     label: "Consumer",
     color: "#6EE7B7",
@@ -70,7 +140,7 @@ const ONTOLOGY = {
 };
 
 // ── Ontology Relationships (Triples) ──────────────────────────────
-const RELATIONSHIPS = [
+const RELATIONSHIPS: Relationship[] = [
   // Consumer ↔ Brand
   { from: "cs1", to: "br1", predicate: "has_affinity_for", strength: 0.85, domain: ["consumer", "brand"] },
   { from: "cs1", to: "br5", predicate: "frequents", strength: 0.69, domain: ["consumer", "brand"] },
@@ -132,7 +202,7 @@ const RELATIONSHIPS = [
 ];
 
 // ── Pre-built Agent Queries & Responses ────────────────────────────
-const DEMO_QUERIES = [
+const DEMO_QUERIES: DemoQuery[] = [
   {
     q: "Which brands should activate at the Pop-Up Experience to reach Eco-Conscious Gen Z?",
     thinking: [
@@ -174,9 +244,9 @@ const DEMO_QUERIES = [
 ];
 
 // ── Helper: find all entities ────────────────────────────────────────
-function getAllEntities() {
-  const all = [];
-  Object.entries(ONTOLOGY).forEach(([domain, data]) => {
+function getAllEntities(): Entity[] {
+  const all: Entity[] = [];
+  (Object.entries(ONTOLOGY) as [DomainKey, OntologyDomain][]).forEach(([domain, data]) => {
     data.subclasses.forEach((sc) => {
       all.push({ ...sc, domain, color: data.color, glow: data.glow, icon: data.icon });
     });
@@ -185,18 +255,18 @@ function getAllEntities() {
 }
 
 // ── Graph Visualization (Canvas-based force layout) ─────────────────
-function GraphCanvas({ highlightedEntities, onNodeClick, activeFilter }) {
-  const canvasRef = useRef(null);
-  const nodesRef = useRef([]);
-  const animRef = useRef(null);
-  const hoveredRef = useRef(null);
-  const [hovered, setHovered] = useState(null);
+function GraphCanvas({ highlightedEntities, onNodeClick, activeFilter }: GraphCanvasProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const nodesRef = useRef<GraphNode[]>([]);
+  const animRef = useRef<number>(0);
+  const hoveredRef = useRef<string | null>(null);
+  const [hovered, setHovered] = useState<string | null>(null);
 
   const entities = useMemo(() => getAllEntities(), []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !canvas.parentElement) return;
     const rect = canvas.parentElement.getBoundingClientRect();
     canvas.width = rect.width * 2;
     canvas.height = rect.height * 2;
@@ -207,14 +277,14 @@ function GraphCanvas({ highlightedEntities, onNodeClick, activeFilter }) {
     const cy = canvas.height / 2;
 
     // Position nodes in domain clusters
-    const domainPositions = {
+    const domainPositions: Record<DomainKey, { x: number; y: number }> = {
       consumer: { x: cx - cx * 0.35, y: cy - cy * 0.32 },
       brand: { x: cx + cx * 0.35, y: cy - cy * 0.32 },
       retail: { x: cx + cx * 0.35, y: cy + cy * 0.32 },
       agent: { x: cx - cx * 0.35, y: cy + cy * 0.32 },
     };
 
-    nodesRef.current = entities.map((e, i) => {
+    nodesRef.current = entities.map((e) => {
       const dp = domainPositions[e.domain];
       const subIdx = ONTOLOGY[e.domain].subclasses.findIndex((s) => s.id === e.id);
       const total = ONTOLOGY[e.domain].subclasses.length;
@@ -233,9 +303,11 @@ function GraphCanvas({ highlightedEntities, onNodeClick, activeFilter }) {
     });
 
     const ctx = canvas.getContext("2d");
+    if (!ctx) return;
     let time = 0;
 
     function draw() {
+      if (!ctx || !canvas) return;
       time += 0.005;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -250,7 +322,7 @@ function GraphCanvas({ highlightedEntities, onNodeClick, activeFilter }) {
       }
 
       // Domain labels
-      Object.entries(domainPositions).forEach(([domain, pos]) => {
+      (Object.entries(domainPositions) as [DomainKey, { x: number; y: number }][]).forEach(([domain, pos]) => {
         const data = ONTOLOGY[domain];
         ctx.font = "bold 22px 'IBM Plex Mono', monospace";
         ctx.fillStyle = data.color + "44";
@@ -356,13 +428,14 @@ function GraphCanvas({ highlightedEntities, onNodeClick, activeFilter }) {
     return () => cancelAnimationFrame(animRef.current);
   }, [entities, highlightedEntities, activeFilter]);
 
-  const handleMouseMove = useCallback((e) => {
+  const handleMouseMove = useCallback((e: MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
+    if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const x = (e.clientX - rect.left) * 2;
     const y = (e.clientY - rect.top) * 2;
     const nodes = nodesRef.current;
-    let found = null;
+    let found: string | null = null;
     for (const node of nodes) {
       const dx = node.x - x;
       const dy = node.y - y;
@@ -376,7 +449,7 @@ function GraphCanvas({ highlightedEntities, onNodeClick, activeFilter }) {
     canvas.style.cursor = found ? "pointer" : "default";
   }, []);
 
-  const handleClick = useCallback((e) => {
+  const handleClick = useCallback(() => {
     if (hoveredRef.current && onNodeClick) {
       const node = nodesRef.current.find((n) => n.id === hoveredRef.current);
       if (node) onNodeClick(node);
@@ -394,8 +467,6 @@ function GraphCanvas({ highlightedEntities, onNodeClick, activeFilter }) {
       {hovered && (() => {
         const node = nodesRef.current.find((n) => n.id === hovered);
         if (!node) return null;
-        const canvas = canvasRef.current;
-        const rect = canvas.getBoundingClientRect();
         const sx = node.x / 2;
         const sy = node.y / 2;
         return (
@@ -421,7 +492,7 @@ function GraphCanvas({ highlightedEntities, onNodeClick, activeFilter }) {
 }
 
 // ── Typewriter Effect ────────────────────────────────────────────────
-function Typewriter({ text, speed = 12, onDone }) {
+function Typewriter({ text, speed = 12, onDone }: TypewriterProps) {
   const [displayed, setDisplayed] = useState("");
   const idx = useRef(0);
 
@@ -433,28 +504,27 @@ function Typewriter({ text, speed = 12, onDone }) {
       if (idx.current >= text.length) {
         setDisplayed(text);
         clearInterval(interval);
-        onDone && onDone();
+        onDone?.();
       } else {
         setDisplayed(text.slice(0, idx.current));
       }
     }, speed);
     return () => clearInterval(interval);
-  }, [text, speed]);
+  }, [text, speed, onDone]);
 
   return <span>{displayed}<span style={{ opacity: displayed.length < text.length ? 1 : 0, color: "#FCD34D" }}>▌</span></span>;
 }
 
 // ── Main App ─────────────────────────────────────────────────────────
 export default function App() {
-  const [activeTab, setActiveTab] = useState("graph");
-  const [activeFilter, setActiveFilter] = useState(null);
-  const [selectedQuery, setSelectedQuery] = useState(null);
-  const [queryPhase, setQueryPhase] = useState("idle"); // idle, thinking, answering, done
+  const [activeTab, setActiveTab] = useState<"graph" | "query" | "ontology">("graph");
+  const [activeFilter, setActiveFilter] = useState<DomainKey | null>(null);
+  const [selectedQuery, setSelectedQuery] = useState<number | null>(null);
+  const [queryPhase, setQueryPhase] = useState<"idle" | "thinking" | "answering" | "done">("idle");
   const [thinkingStep, setThinkingStep] = useState(0);
-  const [selectedNode, setSelectedNode] = useState(null);
-  const [showOntology, setShowOntology] = useState(false);
+  const [selectedNode, setSelectedNode] = useState<Entity | null>(null);
 
-  const runQuery = (idx) => {
+  const runQuery = (idx: number) => {
     setSelectedQuery(idx);
     setQueryPhase("thinking");
     setThinkingStep(0);
@@ -505,7 +575,7 @@ export default function App() {
           </div>
         </div>
         <div style={{ display: "flex", gap: 6, fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }}>
-          {["graph", "query", "ontology"].map((tab) => (
+          {(["graph", "query", "ontology"] as const).map((tab) => (
             <button key={tab} onClick={() => { setActiveTab(tab); if (tab !== "query") { setSelectedQuery(null); setQueryPhase("idle"); } }}
               style={{
                 padding: "7px 16px", borderRadius: 6, border: "none", cursor: "pointer",
@@ -534,7 +604,7 @@ export default function App() {
               color: !activeFilter ? "#fff" : "#777", fontSize: 11, cursor: "pointer",
               fontFamily: "'IBM Plex Mono', monospace",
             }}>All</button>
-          {Object.entries(ONTOLOGY).map(([key, data]) => (
+          {(Object.entries(ONTOLOGY) as [DomainKey, OntologyDomain][]).map(([key, data]) => (
             <button key={key} onClick={() => setActiveFilter(activeFilter === key ? null : key)}
               style={{
                 padding: "5px 12px", borderRadius: 20,
@@ -718,7 +788,7 @@ export default function App() {
 
               {/* Ontology class cards */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 32 }}>
-                {Object.entries(ONTOLOGY).map(([key, data]) => (
+                {(Object.entries(ONTOLOGY) as [DomainKey, OntologyDomain][]).map(([key, data]) => (
                   <div key={key} style={{
                     padding: 24, borderRadius: 12,
                     background: "rgba(255,255,255,0.02)",
@@ -771,7 +841,7 @@ export default function App() {
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
                   {[...new Set(RELATIONSHIPS.map(r => r.predicate))].map((pred) => {
-                    const sample = RELATIONSHIPS.find(r => r.predicate === pred);
+                    const sample = RELATIONSHIPS.find(r => r.predicate === pred)!;
                     const fromDomain = sample.domain[0];
                     const toDomain = sample.domain[1];
                     return (
