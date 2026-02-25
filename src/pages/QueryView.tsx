@@ -65,13 +65,6 @@ export function QueryView() {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Auto-select first embedding result when results arrive
-  useEffect(() => {
-    if (embeddingResults.length > 0 && !selectedEntityId && !selectedNode) {
-      setSelectedEntityId(embeddingResults[0].id);
-    }
-  }, [embeddingResults.length]);
-
   const handleSubmit = (query: string) => {
     if (query.trim() && !isSubmitting) {
       const trimmedQuery = query.trim();
@@ -116,6 +109,13 @@ export function QueryView() {
       });
     }
   }
+
+  // Auto-select first embedding result when results arrive
+  useEffect(() => {
+    if (embeddingResults.length > 0 && !selectedEntityId && !selectedNode) {
+      setSelectedEntityId(embeddingResults[0].id);
+    }
+  }, [embeddingResults.length, selectedEntityId, selectedNode]);
 
   // Extract entity IDs for highlighting on graph
   // Priority: selectedNode (graph click) > selectedEntityId (button click) > all embedding results
