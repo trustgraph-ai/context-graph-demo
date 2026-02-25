@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useTriples } from "@trustgraph/react-state";
+import { useOntologySchema } from "./useOntologySchema";
 import type { Entity, Relationship, DomainKey } from "../types";
 
 // TrustGraph constants
@@ -15,16 +16,6 @@ const DOMAIN_CONFIG: Record<string, { domain: DomainKey; color: string; glow: st
   [`${NS}Retail`]: { domain: "retail", color: "#93C5FD", glow: "rgba(147,197,253,0.4)", icon: "🏬" },
   [`${NS}Agent`]: { domain: "agent", color: "#FCD34D", glow: "rgba(252,211,77,0.4)", icon: "⚡" },
 };
-
-// Known object properties (relationships)
-const OBJECT_PROPERTIES = new Set([
-  `${NS}hasAffinityFor`, `${NS}frequents`, `${NS}purchasesFrom`, `${NS}advocatesFor`, `${NS}loyalTo`,
-  `${NS}shopsVia`, `${NS}discoversThrough`, `${NS}experiences`, `${NS}memberOf`,
-  `${NS}merchandisesIn`, `${NS}activatesVia`, `${NS}promotesOn`, `${NS}sellsThrough`, `${NS}rewardsVia`,
-  `${NS}recommendsTo`, `${NS}personalizesFor`, `${NS}monitorsSentimentOf`, `${NS}optimizesJourneyFor`,
-  `${NS}orchestratesCampaignFor`, `${NS}analyzesPerceptionOf`, `${NS}curatesProductsFor`,
-  `${NS}tailorsExperienceAt`, `${NS}deploysCampaignAt`, `${NS}optimizesFlowAt`,
-]);
 
 // Helper to extract value from a Term
 function getTermValue(term: { t: string; i?: string; v?: string }): string {
@@ -55,6 +46,9 @@ function uriToDomain(uri: string): DomainKey {
 }
 
 export function useGraphData(domain?: DomainKey) {
+  // Get the schema to know which predicates are object properties
+  const { schema } = useOntologySchema();
+
   // Query for entities of each type
   const consumerTypes = useTriples({
     p: { t: "i", i: RDF_TYPE },
@@ -100,9 +94,11 @@ export function useGraphData(domain?: DomainKey) {
 
   // Process the results
   const { entities, relationships } = useMemo(() => {
-    if (isLoading || !allTriples.triples) {
+    if (isLoading || !allTriples.triples || !schema) {
       return { entities: [], relationships: [] };
     }
+
+    const objectPropertyUris = schema.objectPropertyUris;
 
     // Build entity map from type queries
     const entityMap = new Map<string, Entity>();
@@ -155,7 +151,7 @@ export function useGraphData(domain?: DomainKey) {
         entity.label = value;
       } else if (predicate === RDF_TYPE) {
         // Skip type triples
-      } else if (OBJECT_PROPERTIES.has(predicate)) {
+      } else if (objectPropertyUris.has(predicate)) {
         // This is a relationship
         const targetId = uriToId(value);
         const toDomain = uriToDomain(value);
@@ -187,6 +183,7 @@ export function useGraphData(domain?: DomainKey) {
     return { entities, relationships: validRelationships };
   }, [
     isLoading,
+    schema,
     consumerTypes.triples,
     brandTypes.triples,
     retailTypes.triples,
