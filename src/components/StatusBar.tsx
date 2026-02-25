@@ -1,4 +1,12 @@
+import { useGraphData } from "../state";
+
 export function StatusBar() {
+  const { ontology, isLoading } = useGraphData();
+
+  const domainLabels = ontology
+    ? Object.values(ontology).map(d => d.label).join(" × ")
+    : "Loading...";
+
   return (
     <div style={{
       position: "fixed", bottom: 0, left: 0, right: 0,
@@ -8,7 +16,7 @@ export function StatusBar() {
       fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: "#444",
     }}>
       <div style={{ display: "flex", gap: 20 }}>
-        <span>◈ Ontology: Consumer × Agent × Retail × Brand</span>
+        <span>◈ Ontology: {isLoading ? "Loading..." : domainLabels}</span>
         <span>⬡ GraphRAG: Active</span>
         <span>⚡ Agent Orchestration: Online</span>
       </div>

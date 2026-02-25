@@ -30,7 +30,7 @@ export function OntologyView() {
     <div style={{ flex: 1, padding: "28px", overflowY: "auto", height: "calc(100vh - 110px)" }}>
       <div style={{ maxWidth: 900, margin: "0 auto" }}>
         <div style={{ fontSize: 10, color: "#555", fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.1em", marginBottom: 24 }}>
-          ONTOLOGY SCHEMA · RETAIL INTELLIGENCE DOMAIN
+          ONTOLOGY SCHEMA
         </div>
 
         {/* Ontology class cards */}

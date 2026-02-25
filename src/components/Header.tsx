@@ -24,7 +24,7 @@ export function Header({ activeTab, onTabChange }: HeaderProps) {
             TrustGraph
           </div>
           <div style={{ fontSize: 11, color: "#666", fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.05em" }}>
-            RETAIL INTELLIGENCE PLATFORM
+            CONTEXT GRAPH DEMO
           </div>
         </div>
       </div>
