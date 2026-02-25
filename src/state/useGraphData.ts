@@ -38,6 +38,11 @@ function uriToId(uri: string): string {
   return index >= 0 ? uri.substring(index + 1) : uri;
 }
 
+// Helper to get icon for a class (placeholder for now)
+function getClassIcon(_classUri: string): string {
+  return "●";
+}
+
 // Helper to extract predicate name from URI
 function predicateToName(uri: string): string {
   const hashIndex = uri.lastIndexOf("#");
@@ -99,7 +104,7 @@ export function useGraphData(domain?: DomainKey) {
     }
 
     // Build class config dynamically from discovered OWL classes
-    const classConfig = new Map<string, { domain: DomainKey; color: string; glow: string; label: string; description: string }>();
+    const classConfig = new Map<string, { domain: DomainKey; color: string; glow: string; icon: string; label: string; description: string }>();
     let colorIndex = 0;
     for (const classUri of owlClasses) {
       const localName = uriToId(classUri).toLowerCase();
@@ -108,6 +113,7 @@ export function useGraphData(domain?: DomainKey) {
         domain: localName,
         color: palette.color,
         glow: palette.glow,
+        icon: getClassIcon(classUri),
         label: allLabels.get(classUri) || uriToId(classUri),
         description: allComments.get(classUri) || "",
       });
@@ -154,7 +160,7 @@ export function useGraphData(domain?: DomainKey) {
           domain: config.domain,
           color: config.color,
           glow: config.glow,
-          icon: "",
+          icon: config.icon,
         });
       }
     }
@@ -194,7 +200,7 @@ export function useGraphData(domain?: DomainKey) {
         label: config.label,
         color: config.color,
         glow: config.glow,
-        icon: "",
+        icon: config.icon,
         description: config.description,
         properties: [],
         subclasses: entities.filter(e => e.domain === config.domain).map(e => ({
