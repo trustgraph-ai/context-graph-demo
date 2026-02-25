@@ -29,6 +29,7 @@ export interface Relationship {
   from: string;
   to: string;
   predicate: string;
+  strength?: number;
   domain: [DomainKey, DomainKey];
 }
 
