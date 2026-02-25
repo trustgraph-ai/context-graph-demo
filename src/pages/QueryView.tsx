@@ -18,9 +18,20 @@ function uriToId(uri: string): string {
   return index >= 0 ? uri.substring(index + 1) : uri;
 }
 
+// Type for embedding result items
+interface EmbeddingResultItem {
+  id: string;
+  uri: string;
+  label: string;
+  color: string;
+  icon: string;
+  isEntity: boolean;
+}
+
 export function QueryView() {
   const [customInput, setCustomInput] = useState("");
   const [queryForEmbeddings, setQueryForEmbeddings] = useState<string | undefined>(undefined);
+  const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { entities, relationships, ontology, isLoading: graphLoading } = useGraphData();
@@ -70,29 +81,36 @@ export function QueryView() {
 
   // Match graph embedding entities to our loaded entities for labels and highlighting
   // graphEmbeddings returns RDF terms: { t: "i", i: "http://..." }
-  // Show all results, not just matched entities
-  const embeddingResults = (hasEmbeddings && graphEmbeddings || [])
-    .map((ge: { t: string; i?: string }) => {
-      const uri = ge.i;
-      if (!uri) return null;
-      const entityId = uriToId(uri);
-      const found = entities.find(e => e.id === entityId || e.uri === uri);
-      return {
+  // Only show matched entities, deduplicated by URI
+  const embeddingResults: EmbeddingResultItem[] = [];
+  const seenUris = new Set<string>();
+
+  for (const ge of (hasEmbeddings && graphEmbeddings || []) as { t: string; i?: string }[]) {
+    const uri = ge.i;
+    if (!uri || seenUris.has(uri)) continue;
+
+    const entityId = uriToId(uri);
+    const found = entities.find(e => e.id === entityId || e.uri === uri);
+
+    // Only include actual entities, not properties/concepts
+    if (found) {
+      seenUris.add(uri);
+      embeddingResults.push({
         id: entityId,
         uri,
-        label: found?.label || entityId,
-        color: found?.color || "#888",
-        icon: found?.icon || "●",
-        isEntity: !!found,
-      };
-    })
-    .filter(Boolean);
+        label: found.label,
+        color: found.color,
+        icon: found.icon,
+        isEntity: true,
+      });
+    }
+  }
 
-  // Only use matched entities for graph highlighting
-  const matchedEntities = embeddingResults.filter(e => e.isEntity);
-
-  // Extract entity IDs for highlighting on graph (only actual entities, not properties)
-  const highlightedEntities = matchedEntities.map(e => e.id);
+  // Extract entity IDs for highlighting on graph
+  // If an entity is selected, only highlight that one; otherwise highlight all embedding results
+  const highlightedEntities = selectedEntityId
+    ? [selectedEntityId]
+    : embeddingResults.map(e => e.id);
 
   if (graphLoading || !ontology) {
     return (
@@ -185,29 +203,32 @@ export function QueryView() {
               {embeddingResults.length === 0 && !embeddingsLoading && !graphEmbeddingsLoading && (
                 <span style={{ fontSize: 11, color: "#555", fontStyle: "italic" }}>No related concepts found</span>
               )}
-              {embeddingResults.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => {/* TODO: could highlight or navigate */}}
-                  style={{
-                    padding: "6px 12px",
-                    borderRadius: 6,
-                    border: `1px solid ${item.color}44`,
-                    background: `${item.color}15`,
-                    color: item.color,
-                    cursor: "pointer",
-                    fontSize: 11,
-                    fontFamily: "'IBM Plex Mono', monospace",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    opacity: item.isEntity ? 1 : 0.7,
-                  }}
-                >
-                  <span style={{ fontSize: 10 }}>{item.icon}</span>
-                  {item.label}
-                </button>
-              ))}
+              {embeddingResults.map((item) => {
+                const isSelected = selectedEntityId === item.id;
+                return (
+                  <button
+                    key={item.uri}
+                    onClick={() => setSelectedEntityId(isSelected ? null : item.id)}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: 6,
+                      border: `1px solid ${isSelected ? item.color : item.color + "44"}`,
+                      background: isSelected ? `${item.color}35` : `${item.color}15`,
+                      color: item.color,
+                      cursor: "pointer",
+                      fontSize: 11,
+                      fontFamily: "'IBM Plex Mono', monospace",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      boxShadow: isSelected ? `0 0 8px ${item.color}44` : "none",
+                    }}
+                  >
+                    <span style={{ fontSize: 10 }}>{item.icon}</span>
+                    {item.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
