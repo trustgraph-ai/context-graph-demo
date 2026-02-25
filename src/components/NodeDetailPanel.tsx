@@ -9,7 +9,7 @@ interface NodeDetailPanelProps {
 
 export function NodeDetailPanel({ node, onClose, onNodeSelect }: NodeDetailPanelProps) {
   const { ontology } = useOntology();
-  const { incoming, outgoing } = useEntityRelationships(node.id);
+  const { incoming, outgoing } = useEntityRelationships(node.uri);
   const { entities } = useEntities();
 
   const relationships = [...incoming, ...outgoing];

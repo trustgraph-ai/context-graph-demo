@@ -26,8 +26,10 @@ function getTermValue(term: { t: string; i?: string; v?: string }): string {
 
 // Helper to create a short ID from a URI
 function uriToId(uri: string): string {
-  const parts = uri.split("/");
-  return parts[parts.length - 1];
+  const hashIndex = uri.lastIndexOf("#");
+  const slashIndex = uri.lastIndexOf("/");
+  const index = Math.max(hashIndex, slashIndex);
+  return index >= 0 ? uri.substring(index + 1) : uri;
 }
 
 // Helper to extract predicate name from URI
@@ -121,6 +123,7 @@ export function useGraphData(domain?: DomainKey) {
         if (!entityMap.has(entityUri)) {
           entityMap.set(entityUri, {
             id: entityId,
+            uri: entityUri,
             label: entityId,
             props: {},
             domain: config.domain,

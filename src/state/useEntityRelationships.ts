@@ -15,8 +15,10 @@ function getTermValue(term: { t: string; i?: string; v?: string }): string {
 
 // Helper to create a short ID from a URI
 function uriToId(uri: string): string {
-  const parts = uri.split("/");
-  return parts[parts.length - 1];
+  const hashIndex = uri.lastIndexOf("#");
+  const slashIndex = uri.lastIndexOf("/");
+  const index = Math.max(hashIndex, slashIndex);
+  return index >= 0 ? uri.substring(index + 1) : uri;
 }
 
 // Helper to extract predicate name from URI
@@ -37,13 +39,7 @@ function uriToDomain(uri: string): DomainKey {
   return "consumer";
 }
 
-// Build entity URI from ID
-function idToUri(entityId: string): string {
-  return `https://trustgraph.ai/retail/${entityId}`;
-}
-
-export function useEntityRelationships(entityId: string | undefined) {
-  const entityUri = entityId ? idToUri(entityId) : undefined;
+export function useEntityRelationships(entityUri: string | undefined) {
 
   // Get the schema to know which predicates are object properties
   const { schema } = useOntologySchema();
@@ -67,10 +63,11 @@ export function useEntityRelationships(entityId: string | undefined) {
   const error = outgoingTriples.error || incomingTriples.error;
 
   const { incoming, outgoing } = useMemo(() => {
-    if (!entityId || !schema) {
+    if (!entityUri || !schema) {
       return { incoming: [], outgoing: [] };
     }
 
+    const entityId = uriToId(entityUri);
     const objectPropertyUris = schema.objectPropertyUris;
     const outgoing: Relationship[] = [];
     const incoming: Relationship[] = [];
@@ -82,7 +79,7 @@ export function useEntityRelationships(entityId: string | undefined) {
 
       // Only include if predicate is an object property
       if (objectPropertyUris.has(predicate)) {
-        const fromDomain = uriToDomain(entityId);
+        const fromDomain = uriToDomain(entityUri);
         const toDomain = uriToDomain(targetUri);
 
         outgoing.push({
@@ -103,7 +100,7 @@ export function useEntityRelationships(entityId: string | undefined) {
       // Only include if predicate is an object property
       if (objectPropertyUris.has(predicate)) {
         const fromDomain = uriToDomain(sourceUri);
-        const toDomain = uriToDomain(entityId);
+        const toDomain = uriToDomain(entityUri);
 
         incoming.push({
           from: uriToId(sourceUri),
@@ -116,7 +113,7 @@ export function useEntityRelationships(entityId: string | undefined) {
     }
 
     return { incoming, outgoing };
-  }, [entityId, schema, outgoingTriples.triples, incomingTriples.triples]);
+  }, [entityUri, schema, outgoingTriples.triples, incomingTriples.triples]);
 
   return {
     incoming,

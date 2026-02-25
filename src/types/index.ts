@@ -7,6 +7,7 @@ export interface EntityProps {
 
 export interface Subclass {
   id: string;
+  uri?: string;
   label: string;
   props: EntityProps;
 }
