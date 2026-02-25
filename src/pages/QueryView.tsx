@@ -28,16 +28,17 @@ export function QueryView() {
   const messages = useConversation((state) => state.messages);
   const setChatMode = useConversation((state) => state.setChatMode);
 
-  // Get embeddings for the query text
+  // Get embeddings for the query text - only fetch when we have a committed query
   const { embeddings, isLoading: embeddingsLoading } = useEmbeddings({
     flow: "default",
-    term: queryForEmbeddings,
+    term: queryForEmbeddings || undefined,
   });
 
-  // Get graph entities from embeddings
+  // Get graph entities from embeddings - only fetch when we have embeddings
+  const hasEmbeddings = embeddings && embeddings.length > 0;
   const { graphEmbeddings, isLoading: graphEmbeddingsLoading } = useGraphEmbeddings({
-    vecs: embeddings || [],
-    limit: 10,
+    vecs: hasEmbeddings ? embeddings : [[]],
+    limit: hasEmbeddings ? 10 : 0,
     collection: "retail",
   });
 
@@ -68,15 +69,29 @@ export function QueryView() {
   };
 
   // Match graph embedding entities to our loaded entities for labels and highlighting
-  const matchedEntities = (graphEmbeddings || [])
-    .map((ge: { entity: string }) => {
-      const entityId = uriToId(ge.entity);
-      const found = entities.find(e => e.id === entityId || e.uri === ge.entity);
-      return found ? { ...found, uri: ge.entity } : null;
+  // graphEmbeddings returns RDF terms: { t: "i", i: "http://..." }
+  // Show all results, not just matched entities
+  const embeddingResults = (hasEmbeddings && graphEmbeddings || [])
+    .map((ge: { t: string; i?: string }) => {
+      const uri = ge.i;
+      if (!uri) return null;
+      const entityId = uriToId(uri);
+      const found = entities.find(e => e.id === entityId || e.uri === uri);
+      return {
+        id: entityId,
+        uri,
+        label: found?.label || entityId,
+        color: found?.color || "#888",
+        icon: found?.icon || "●",
+        isEntity: !!found,
+      };
     })
-    .filter(Boolean) as typeof entities;
+    .filter(Boolean);
 
-  // Extract entity IDs for highlighting on graph
+  // Only use matched entities for graph highlighting
+  const matchedEntities = embeddingResults.filter(e => e.isEntity);
+
+  // Extract entity IDs for highlighting on graph (only actual entities, not properties)
   const highlightedEntities = matchedEntities.map(e => e.id);
 
   if (graphLoading || !ontology) {
@@ -167,29 +182,30 @@ export function QueryView() {
               RELATED ENTITIES {(embeddingsLoading || graphEmbeddingsLoading) && <span style={{ color: "#FCD34D" }}>loading...</span>}
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {matchedEntities.length === 0 && !embeddingsLoading && !graphEmbeddingsLoading && (
-                <span style={{ fontSize: 11, color: "#555", fontStyle: "italic" }}>No related entities found</span>
+              {embeddingResults.length === 0 && !embeddingsLoading && !graphEmbeddingsLoading && (
+                <span style={{ fontSize: 11, color: "#555", fontStyle: "italic" }}>No related concepts found</span>
               )}
-              {matchedEntities.map((entity) => (
+              {embeddingResults.map((item) => (
                 <button
-                  key={entity.id}
+                  key={item.id}
                   onClick={() => {/* TODO: could highlight or navigate */}}
                   style={{
                     padding: "6px 12px",
                     borderRadius: 6,
-                    border: `1px solid ${entity.color}44`,
-                    background: `${entity.color}15`,
-                    color: entity.color,
+                    border: `1px solid ${item.color}44`,
+                    background: `${item.color}15`,
+                    color: item.color,
                     cursor: "pointer",
                     fontSize: 11,
                     fontFamily: "'IBM Plex Mono', monospace",
                     display: "flex",
                     alignItems: "center",
                     gap: 6,
+                    opacity: item.isEntity ? 1 : 0.7,
                   }}
                 >
-                  <span style={{ fontSize: 10 }}>{entity.icon}</span>
-                  {entity.label}
+                  <span style={{ fontSize: 10 }}>{item.icon}</span>
+                  {item.label}
                 </button>
               ))}
             </div>
