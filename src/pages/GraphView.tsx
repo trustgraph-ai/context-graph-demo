@@ -16,6 +16,21 @@ export function GraphView({ activeFilter, onFilterChange, selectedNode, onNodeSe
     ? [selectedNode.id, ...relationships.filter(r => r.from === selectedNode.id || r.to === selectedNode.id).map(r => r.from === selectedNode.id ? r.to : r.from)]
     : [];
 
+  // Compute relevant filter domains based on selected node's connections
+  const relevantDomains = selectedNode
+    ? (() => {
+        const domains = new Set<DomainKey>([selectedNode.domain]);
+        const connectedIds = relationships
+          .filter(r => r.from === selectedNode.id || r.to === selectedNode.id)
+          .map(r => r.from === selectedNode.id ? r.to : r.from);
+        for (const id of connectedIds) {
+          const entity = entities.find(e => e.id === id);
+          if (entity) domains.add(entity.domain);
+        }
+        return domains;
+      })()
+    : null;
+
   if (isLoading) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#666" }}>
@@ -40,25 +55,34 @@ export function GraphView({ activeFilter, onFilterChange, selectedNode, onNodeSe
         borderBottom: "1px solid rgba(255,255,255,0.04)",
       }}>
         <span style={{ fontSize: 11, color: "#555", fontFamily: "'IBM Plex Mono', monospace", marginRight: 8 }}>FILTER:</span>
-        <button onClick={() => onFilterChange(null)}
-          style={{
-            padding: "5px 12px", borderRadius: 20, border: `1px solid ${!activeFilter ? '#fff' : 'rgba(255,255,255,0.1)'}`,
-            background: !activeFilter ? "rgba(255,255,255,0.08)" : "transparent",
-            color: !activeFilter ? "#fff" : "#777", fontSize: 11, cursor: "pointer",
-            fontFamily: "'IBM Plex Mono', monospace",
-          }}>All</button>
-        {(Object.entries(ontology) as [DomainKey, OntologyDomain][]).map(([key, data]) => (
-          <button key={key} onClick={() => onFilterChange(activeFilter === key ? null : key)}
-            style={{
-              padding: "5px 12px", borderRadius: 20,
-              border: `1px solid ${activeFilter === key ? data.color + '88' : 'rgba(255,255,255,0.1)'}`,
-              background: activeFilter === key ? data.color + "15" : "transparent",
-              color: activeFilter === key ? data.color : "#777",
-              fontSize: 11, cursor: "pointer", fontFamily: "'IBM Plex Mono', monospace",
-            }}>
-            {data.icon} {data.label}
-          </button>
-        ))}
+        {selectedNode ? (
+          <>
+            <button onClick={() => onFilterChange(null)}
+              style={{
+                padding: "5px 12px", borderRadius: 20, border: `1px solid ${!activeFilter ? '#fff' : 'rgba(255,255,255,0.1)'}`,
+                background: !activeFilter ? "rgba(255,255,255,0.08)" : "transparent",
+                color: !activeFilter ? "#fff" : "#777", fontSize: 11, cursor: "pointer",
+                fontFamily: "'IBM Plex Mono', monospace",
+              }}>All</button>
+            {(Object.entries(ontology) as [DomainKey, OntologyDomain][])
+              .filter(([key]) => relevantDomains?.has(key))
+              .slice(0, 10)
+              .map(([key, data]) => (
+                <button key={key} onClick={() => onFilterChange(activeFilter === key ? null : key)}
+                  style={{
+                    padding: "5px 12px", borderRadius: 20,
+                    border: `1px solid ${activeFilter === key ? data.color + '88' : 'rgba(255,255,255,0.1)'}`,
+                    background: activeFilter === key ? data.color + "15" : "transparent",
+                    color: activeFilter === key ? data.color : "#777",
+                    fontSize: 11, cursor: "pointer", fontFamily: "'IBM Plex Mono', monospace",
+                  }}>
+                  {data.icon} {data.label}
+                </button>
+              ))}
+          </>
+        ) : (
+          <span style={{ fontSize: 11, color: "#555", fontStyle: "italic" }}>Select a node to filter</span>
+        )}
         <div style={{ marginLeft: "auto", fontSize: 11, color: "#444", fontFamily: "'IBM Plex Mono', monospace" }}>
           {entities.length} entities · {relationships.length} relationships
         </div>
