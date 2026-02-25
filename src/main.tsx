@@ -19,7 +19,7 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <NotificationProvider handler={notificationHandler}>
-        <SocketProvider>
+        <SocketProvider user="demo">
           <App />
         </SocketProvider>
       </NotificationProvider>
