@@ -55,7 +55,7 @@ export function NodeDetailPanel({ node, relationships, entities, ontology, prope
                 <span style={{ color: other?.color || "#888" }}>{direction} {other?.label}</span>
               </div>
               <div style={{ fontSize: 10, color: "#666", fontFamily: "'IBM Plex Mono', monospace", marginTop: 2 }}>
-                {r.predicate.replace(/_/g, " ")} · strength: {r.strength}
+                {r.predicate.replace(/_/g, " ")}
               </div>
             </div>
           );

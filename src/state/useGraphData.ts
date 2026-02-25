@@ -176,7 +176,6 @@ export function useGraphData(domain?: DomainKey) {
           from: fromEntity.id,
           to: toEntity.id,
           predicate: predicateToName(predicate),
-          strength: 0.8,
           domain: [fromEntity.domain, toEntity.domain],
         });
       }

@@ -139,7 +139,7 @@ export function GraphCanvas({ entities, relationships, ontology, highlightedEnti
 
         // Animated particles on highlighted edges
         if (isHighlighted) {
-          const t = (time * 2 + rel.strength) % 1;
+          const t = (time * 2) % 1;
           const px = (1 - t) * (1 - t) * fromNode.x + 2 * (1 - t) * t * mx + t * t * toNode.x;
           const py = (1 - t) * (1 - t) * fromNode.y + 2 * (1 - t) * t * my + t * t * toNode.y;
           ctx.beginPath();
