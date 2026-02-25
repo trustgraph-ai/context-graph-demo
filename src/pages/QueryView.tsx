@@ -68,6 +68,7 @@ export function QueryView() {
       const trimmedQuery = query.trim();
       submitMessage({ input: trimmedQuery });
       setQueryForEmbeddings(trimmedQuery);
+      setSelectedEntityId(null);
       setCustomInput("");
     }
   };
@@ -107,10 +108,22 @@ export function QueryView() {
   }
 
   // Extract entity IDs for highlighting on graph
-  // If an entity is selected, only highlight that one; otherwise highlight all embedding results
-  const highlightedEntities = selectedEntityId
-    ? [selectedEntityId]
-    : embeddingResults.map(e => e.id);
+  // If an entity is selected, highlight it and all connected entities; otherwise highlight all embedding results
+  const highlightedEntities = (() => {
+    if (!selectedEntityId) {
+      return embeddingResults.map(e => e.id);
+    }
+    // Find all entities connected to the selected entity
+    const connected = new Set<string>([selectedEntityId]);
+    for (const rel of relationships) {
+      if (rel.from === selectedEntityId) {
+        connected.add(rel.to);
+      } else if (rel.to === selectedEntityId) {
+        connected.add(rel.from);
+      }
+    }
+    return Array.from(connected);
+  })();
 
   if (graphLoading || !ontology) {
     return (
