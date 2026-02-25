@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import { useTriples } from "@trustgraph/react-state";
-import { useOntologySchema } from "./useOntologySchema";
-import type { Entity, Relationship, DomainKey } from "../types";
+import type { Entity, Relationship, DomainKey, OntologyType } from "../types";
 
 // TrustGraph constants
 const COLLECTION = "retail";
@@ -9,12 +8,36 @@ const NS = "http://trustgraph.ai/retail#";
 const RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
 const RDFS_LABEL = "http://www.w3.org/2000/01/rdf-schema#label";
 
-// Domain configuration
-const DOMAIN_CONFIG: Record<string, { domain: DomainKey; color: string; glow: string; icon: string }> = {
-  [`${NS}Consumer`]: { domain: "consumer", color: "#6EE7B7", glow: "rgba(110,231,183,0.4)", icon: "👤" },
-  [`${NS}Brand`]: { domain: "brand", color: "#F9A8D4", glow: "rgba(249,168,212,0.4)", icon: "✦" },
-  [`${NS}Retail`]: { domain: "retail", color: "#93C5FD", glow: "rgba(147,197,253,0.4)", icon: "🏬" },
-  [`${NS}Agent`]: { domain: "agent", color: "#FCD34D", glow: "rgba(252,211,77,0.4)", icon: "⚡" },
+// Domain configuration - maps class URIs to domain metadata
+const DOMAIN_CONFIG: Record<string, { domain: DomainKey; color: string; glow: string; icon: string; description: string }> = {
+  [`${NS}Consumer`]: {
+    domain: "consumer",
+    color: "#6EE7B7",
+    glow: "rgba(110,231,183,0.4)",
+    icon: "👤",
+    description: "Individuals and segments interacting with brands through retail channels",
+  },
+  [`${NS}Brand`]: {
+    domain: "brand",
+    color: "#F9A8D4",
+    glow: "rgba(249,168,212,0.4)",
+    icon: "✦",
+    description: "Product brands seeking to connect with consumers through retail experiences",
+  },
+  [`${NS}Retail`]: {
+    domain: "retail",
+    color: "#93C5FD",
+    glow: "rgba(147,197,253,0.4)",
+    icon: "🏬",
+    description: "Channels, touchpoints, and experiences where brands meet consumers",
+  },
+  [`${NS}Agent`]: {
+    domain: "agent",
+    color: "#FCD34D",
+    glow: "rgba(252,211,77,0.4)",
+    icon: "⚡",
+    description: "AI agents that orchestrate personalized brand-consumer connections",
+  },
 };
 
 // Helper to extract value from a Term
@@ -34,170 +57,172 @@ function uriToId(uri: string): string {
 
 // Helper to extract predicate name from URI
 function predicateToName(uri: string): string {
-  const name = uri.replace(NS, "");
+  const hashIndex = uri.lastIndexOf("#");
+  const slashIndex = uri.lastIndexOf("/");
+  const index = Math.max(hashIndex, slashIndex);
+  const name = index >= 0 ? uri.substring(index + 1) : uri;
   return name.replace(/([a-z])([A-Z])/g, "$1_$2").toLowerCase();
 }
 
-// Helper to determine domain from URI
-function uriToDomain(uri: string): DomainKey {
-  if (uri.includes("consumer")) return "consumer";
-  if (uri.includes("brand")) return "brand";
-  if (uri.includes("retail")) return "retail";
-  if (uri.includes("agent")) return "agent";
-  return "consumer";
-}
-
 export function useGraphData(domain?: DomainKey) {
-  // Get the schema to know which predicates are object properties
-  const { schema } = useOntologySchema();
-
-  // Query for entities of each type
-  const consumerTypes = useTriples({
-    p: { t: "i", i: RDF_TYPE },
-    o: { t: "i", i: `${NS}Consumer` },
-    limit: 100,
-    collection: COLLECTION,
-  });
-
-  const brandTypes = useTriples({
-    p: { t: "i", i: RDF_TYPE },
-    o: { t: "i", i: `${NS}Brand` },
-    limit: 100,
-    collection: COLLECTION,
-  });
-
-  const retailTypes = useTriples({
-    p: { t: "i", i: RDF_TYPE },
-    o: { t: "i", i: `${NS}Retail` },
-    limit: 100,
-    collection: COLLECTION,
-  });
-
-  const agentTypes = useTriples({
-    p: { t: "i", i: RDF_TYPE },
-    o: { t: "i", i: `${NS}Agent` },
-    limit: 100,
-    collection: COLLECTION,
-  });
-
-  // Query for all triples in the namespace (to get properties and relationships)
-  // We query with no subject filter to get all data
+  // Single query for all triples
   const allTriples = useTriples({
     limit: 1000,
     collection: COLLECTION,
   });
 
-  const isLoading = consumerTypes.isLoading || brandTypes.isLoading ||
-                    retailTypes.isLoading || agentTypes.isLoading || allTriples.isLoading;
-  const isError = consumerTypes.isError || brandTypes.isError ||
-                  retailTypes.isError || agentTypes.isError || allTriples.isError;
-  const error = consumerTypes.error || brandTypes.error ||
-                retailTypes.error || agentTypes.error || allTriples.error;
+  const isLoading = allTriples.isLoading;
+  const isError = allTriples.isError;
+  const error = allTriples.error;
 
-  // Process the results
-  const { entities, relationships } = useMemo(() => {
-    if (isLoading || !allTriples.triples || !schema) {
-      return { entities: [], relationships: [] };
+  // Process all data from the single query
+  const { entities, relationships, ontology } = useMemo(() => {
+    if (isLoading || !allTriples.triples) {
+      return { entities: [], relationships: [], ontology: undefined };
     }
 
-    const objectPropertyUris = schema.objectPropertyUris;
-
-    // Build entity map from type queries
+    // First pass: find all entities by their rdf:type
     const entityMap = new Map<string, Entity>();
-    const typeResults = [
-      { triples: consumerTypes.triples || [], typeUri: `${NS}Consumer` },
-      { triples: brandTypes.triples || [], typeUri: `${NS}Brand` },
-      { triples: retailTypes.triples || [], typeUri: `${NS}Retail` },
-      { triples: agentTypes.triples || [], typeUri: `${NS}Agent` },
-    ];
+    const entityLabels = new Map<string, string>();
+    const entityProps = new Map<string, Record<string, string | number>>();
 
-    for (const { triples, typeUri } of typeResults) {
-      const config = DOMAIN_CONFIG[typeUri];
-      if (!config) continue;
-      if (domain && config.domain !== domain) continue;
-
-      for (const triple of triples) {
-        const entityUri = getTermValue(triple.s);
-        const entityId = uriToId(entityUri);
-
-        if (!entityMap.has(entityUri)) {
-          entityMap.set(entityUri, {
-            id: entityId,
-            uri: entityUri,
-            label: entityId,
-            props: {},
-            domain: config.domain,
-            color: config.color,
-            glow: config.glow,
-            icon: config.icon,
-          });
-        }
-      }
-    }
-
-    // Process all triples to get labels, properties, and relationships
-    const relationships: Relationship[] = [];
-    const entityUris = new Set(entityMap.keys());
-
-    for (const triple of allTriples.triples || []) {
+    // Collect labels and props first
+    for (const triple of allTriples.triples) {
       const subjectUri = getTermValue(triple.s);
       const predicate = getTermValue(triple.p);
       const value = getTermValue(triple.o);
 
-      // Only process triples for our entities
-      if (!entityUris.has(subjectUri)) continue;
-
-      const entity = entityMap.get(subjectUri);
-      if (!entity) continue;
-
       if (predicate === RDFS_LABEL) {
-        entity.label = value;
-      } else if (predicate === RDF_TYPE) {
-        // Skip type triples
-      } else if (objectPropertyUris.has(predicate)) {
-        // This is a relationship
-        const targetId = uriToId(value);
-        const toDomain = uriToDomain(value);
+        entityLabels.set(subjectUri, value);
+      } else if (predicate.startsWith(NS) && value && !value.startsWith("http")) {
+        if (!entityProps.has(subjectUri)) {
+          entityProps.set(subjectUri, {});
+        }
+        const propName = predicate.replace(NS, "");
+        entityProps.get(subjectUri)![propName] = value;
+      }
+    }
+
+    // Find entities by type
+    for (const triple of allTriples.triples) {
+      const subjectUri = getTermValue(triple.s);
+      const predicate = getTermValue(triple.p);
+      const objectUri = getTermValue(triple.o);
+
+      if (predicate === RDF_TYPE && DOMAIN_CONFIG[objectUri]) {
+        const config = DOMAIN_CONFIG[objectUri];
+        if (domain && config.domain !== domain) continue;
+
+        const entityId = uriToId(subjectUri);
+        entityMap.set(subjectUri, {
+          id: entityId,
+          uri: subjectUri,
+          label: entityLabels.get(subjectUri) || entityId,
+          props: entityProps.get(subjectUri) || {},
+          domain: config.domain,
+          color: config.color,
+          glow: config.glow,
+          icon: config.icon,
+        });
+      }
+    }
+
+    // Find relationships: triples where both subject and object are known entities
+    const relationships: Relationship[] = [];
+    const entityUris = new Set(entityMap.keys());
+
+    for (const triple of allTriples.triples) {
+      const subjectUri = getTermValue(triple.s);
+      const predicate = getTermValue(triple.p);
+      const objectUri = getTermValue(triple.o);
+
+      // Skip rdf:type and rdfs:label
+      if (predicate === RDF_TYPE || predicate === RDFS_LABEL) continue;
+
+      // If both subject and object are entities, it's a relationship
+      if (entityUris.has(subjectUri) && entityUris.has(objectUri)) {
+        const fromEntity = entityMap.get(subjectUri)!;
+        const toEntity = entityMap.get(objectUri)!;
 
         relationships.push({
-          from: entity.id,
-          to: targetId,
+          from: fromEntity.id,
+          to: toEntity.id,
           predicate: predicateToName(predicate),
           strength: 0.8,
-          domain: [entity.domain, toDomain],
+          domain: [fromEntity.domain, toEntity.domain],
         });
-      } else if (predicate.startsWith(NS)) {
-        // Datatype property
-        const propName = predicate.replace(NS, "");
-        if (value && !value.startsWith("http")) {
-          entity.props[propName] = value;
-        }
       }
     }
 
     const entities = Array.from(entityMap.values());
 
-    // Filter relationships to only include those where both entities exist
-    const entityIds = new Set(entities.map(e => e.id));
-    const validRelationships = relationships.filter(
-      r => entityIds.has(r.from) && entityIds.has(r.to)
-    );
+    // Build ontology metadata for components that need it
+    const ontology: OntologyType = {
+      consumer: {
+        label: "Consumer",
+        color: "#6EE7B7",
+        glow: "rgba(110,231,183,0.4)",
+        icon: "👤",
+        description: "Individuals and segments interacting with brands through retail channels",
+        properties: [],
+        subclasses: entities.filter(e => e.domain === "consumer").map(e => ({
+          id: e.id,
+          uri: e.uri,
+          label: e.label,
+          props: e.props,
+        })),
+      },
+      brand: {
+        label: "Brand",
+        color: "#F9A8D4",
+        glow: "rgba(249,168,212,0.4)",
+        icon: "✦",
+        description: "Product brands seeking to connect with consumers through retail experiences",
+        properties: [],
+        subclasses: entities.filter(e => e.domain === "brand").map(e => ({
+          id: e.id,
+          uri: e.uri,
+          label: e.label,
+          props: e.props,
+        })),
+      },
+      retail: {
+        label: "Retail",
+        color: "#93C5FD",
+        glow: "rgba(147,197,253,0.4)",
+        icon: "🏬",
+        description: "Channels, touchpoints, and experiences where brands meet consumers",
+        properties: [],
+        subclasses: entities.filter(e => e.domain === "retail").map(e => ({
+          id: e.id,
+          uri: e.uri,
+          label: e.label,
+          props: e.props,
+        })),
+      },
+      agent: {
+        label: "Agent",
+        color: "#FCD34D",
+        glow: "rgba(252,211,77,0.4)",
+        icon: "⚡",
+        description: "AI agents that orchestrate personalized brand-consumer connections",
+        properties: [],
+        subclasses: entities.filter(e => e.domain === "agent").map(e => ({
+          id: e.id,
+          uri: e.uri,
+          label: e.label,
+          props: e.props,
+        })),
+      },
+    };
 
-    return { entities, relationships: validRelationships };
-  }, [
-    isLoading,
-    schema,
-    consumerTypes.triples,
-    brandTypes.triples,
-    retailTypes.triples,
-    agentTypes.triples,
-    allTriples.triples,
-    domain,
-  ]);
+    return { entities, relationships, ontology };
+  }, [isLoading, allTriples.triples, domain]);
 
   return {
     entities,
     relationships,
+    ontology,
     isLoading,
     isError,
     error,

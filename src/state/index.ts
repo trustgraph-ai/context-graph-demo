@@ -1,13 +1,8 @@
-// Core data hooks
-export { useOntology } from "./useOntology";
-export { useOntologySchema } from "./useOntologySchema";
-export { useEntities } from "./useEntities";
-export { useEntity } from "./useEntity";
-export { useRelationships } from "./useRelationships";
-
-// Composite hooks
+// Main data hook - provides entities, relationships, and ontology
 export { useGraphData } from "./useGraphData";
-export { useEntityRelationships } from "./useEntityRelationships";
 
-// Query hooks
+// Schema hook - for OWL ontology schema view
+export { useOntologySchema } from "./useOntologySchema";
+
+// Query hook
 export { useDemoQueries } from "./useDemoQueries";

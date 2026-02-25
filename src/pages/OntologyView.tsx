@@ -1,5 +1,5 @@
 import type { DomainKey, OntologyDomain } from "../types";
-import { useOntology, useOntologySchema } from "../state";
+import { useGraphData, useOntologySchema } from "../state";
 
 // Helper to get local name from URI
 function getLocalName(uri: string): string {
@@ -10,10 +10,10 @@ function getLocalName(uri: string): string {
 }
 
 export function OntologyView() {
-  const { ontology, isLoading: ontologyLoading } = useOntology();
+  const { ontology, isLoading: graphLoading } = useGraphData();
   const { schema, isLoading: schemaLoading } = useOntologySchema();
 
-  const isLoading = ontologyLoading || schemaLoading;
+  const isLoading = graphLoading || schemaLoading;
 
   if (isLoading || !ontology || !schema) {
     return (

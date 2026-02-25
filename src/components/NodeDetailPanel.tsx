@@ -1,20 +1,20 @@
-import type { Entity } from "../types";
-import { useOntology, useEntityRelationships, useEntities } from "../state";
+import type { Entity, Relationship, OntologyType } from "../types";
 
 interface NodeDetailPanelProps {
   node: Entity;
+  relationships: Relationship[];
+  entities: Entity[];
+  ontology: OntologyType;
   onClose: () => void;
   onNodeSelect: (node: Entity) => void;
 }
 
-export function NodeDetailPanel({ node, onClose, onNodeSelect }: NodeDetailPanelProps) {
-  const { ontology } = useOntology();
-  const { incoming, outgoing } = useEntityRelationships(node.uri);
-  const { entities } = useEntities();
+export function NodeDetailPanel({ node, relationships, entities, ontology, onClose, onNodeSelect }: NodeDetailPanelProps) {
+  // Filter relationships for this node
+  const nodeRelationships = relationships.filter(
+    r => r.from === node.id || r.to === node.id
+  );
 
-  const relationships = [...incoming, ...outgoing];
-
-  if (!ontology) return null;
   return (
     <div style={{
       width: 320, flexShrink: 0, borderLeft: "1px solid rgba(255,255,255,0.06)",
@@ -40,7 +40,7 @@ export function NodeDetailPanel({ node, onClose, onNodeSelect }: NodeDetailPanel
       </div>
       <div style={{ marginTop: 24 }}>
         <div style={{ fontSize: 10, color: "#555", fontFamily: "'IBM Plex Mono', monospace", marginBottom: 10, letterSpacing: "0.1em" }}>RELATIONSHIPS</div>
-        {relationships.map((r, i) => {
+        {nodeRelationships.map((r, i) => {
           const otherId = r.from === node.id ? r.to : r.from;
           const other = entities.find(e => e.id === otherId);
           const direction = r.from === node.id ? "→" : "←";

@@ -1,6 +1,6 @@
 import type { DomainKey, Entity, OntologyDomain } from "../types";
 import { GraphCanvas, NodeDetailPanel } from "../components";
-import { useGraphData, useOntology } from "../state";
+import { useGraphData } from "../state";
 
 interface GraphViewProps {
   activeFilter: DomainKey | null;
@@ -10,11 +10,7 @@ interface GraphViewProps {
 }
 
 export function GraphView({ activeFilter, onFilterChange, selectedNode, onNodeSelect }: GraphViewProps) {
-  const { entities, relationships, isLoading: graphLoading, isError: graphError } = useGraphData();
-  const { ontology, isLoading: ontologyLoading, isError: ontologyError } = useOntology();
-
-  const isLoading = graphLoading || ontologyLoading;
-  const isError = graphError || ontologyError;
+  const { entities, relationships, ontology, isLoading, isError } = useGraphData();
 
   const highlightedEntities = selectedNode
     ? [selectedNode.id, ...relationships.filter(r => r.from === selectedNode.id || r.to === selectedNode.id).map(r => r.from === selectedNode.id ? r.to : r.from)]
@@ -83,6 +79,9 @@ export function GraphView({ activeFilter, onFilterChange, selectedNode, onNodeSe
         {selectedNode && (
           <NodeDetailPanel
             node={selectedNode}
+            relationships={relationships}
+            entities={entities}
+            ontology={ontology}
             onClose={() => onNodeSelect(null)}
             onNodeSelect={onNodeSelect}
           />

@@ -1,18 +1,17 @@
 import { useState } from "react";
 import type { QueryPhase } from "../types";
 import { GraphCanvas, Typewriter } from "../components";
-import { useGraphData, useOntology, useDemoQueries } from "../state";
+import { useGraphData, useDemoQueries } from "../state";
 
 export function QueryView() {
   const [selectedQuery, setSelectedQuery] = useState<number | null>(null);
   const [queryPhase, setQueryPhase] = useState<QueryPhase>("idle");
   const [thinkingStep, setThinkingStep] = useState(0);
 
-  const { entities, relationships, isLoading: graphLoading } = useGraphData();
-  const { ontology, isLoading: ontologyLoading } = useOntology();
+  const { entities, relationships, ontology, isLoading: graphLoading } = useGraphData();
   const { queries: demoQueries, isLoading: queriesLoading } = useDemoQueries();
 
-  const isLoading = graphLoading || ontologyLoading || queriesLoading;
+  const isLoading = graphLoading || queriesLoading;
 
   const runQuery = (idx: number) => {
     setSelectedQuery(idx);
