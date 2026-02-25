@@ -1,5 +1,6 @@
 // Core data hooks
 export { useOntology } from "./useOntology";
+export { useOntologySchema } from "./useOntologySchema";
 export { useEntities } from "./useEntities";
 export { useEntity } from "./useEntity";
 export { useRelationships } from "./useRelationships";
