@@ -1,18 +1,24 @@
 import { useState } from "react";
 import type { QueryPhase } from "../types";
 import { GraphCanvas, Typewriter } from "../components";
-import { DEMO_QUERIES } from "../data";
+import { useGraphData, useOntology, useDemoQueries } from "../state";
 
 export function QueryView() {
   const [selectedQuery, setSelectedQuery] = useState<number | null>(null);
   const [queryPhase, setQueryPhase] = useState<QueryPhase>("idle");
   const [thinkingStep, setThinkingStep] = useState(0);
 
+  const { entities, relationships, isLoading: graphLoading } = useGraphData();
+  const { ontology, isLoading: ontologyLoading } = useOntology();
+  const { queries: demoQueries, isLoading: queriesLoading } = useDemoQueries();
+
+  const isLoading = graphLoading || ontologyLoading || queriesLoading;
+
   const runQuery = (idx: number) => {
     setSelectedQuery(idx);
     setQueryPhase("thinking");
     setThinkingStep(0);
-    const q = DEMO_QUERIES[idx];
+    const q = demoQueries[idx];
     let step = 0;
     const interval = setInterval(() => {
       step++;
@@ -25,8 +31,16 @@ export function QueryView() {
   };
 
   const highlightedEntities = selectedQuery !== null && queryPhase !== "idle"
-    ? DEMO_QUERIES[selectedQuery].entities
+    ? demoQueries[selectedQuery].entities
     : [];
+
+  if (isLoading || !ontology) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#666" }}>
+        Loading...
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: "flex", height: "calc(100vh - 110px)" }}>
@@ -36,7 +50,7 @@ export function QueryView() {
           <div style={{ fontSize: 10, color: "#555", fontFamily: "'IBM Plex Mono', monospace", marginBottom: 12, letterSpacing: "0.1em" }}>
             SELECT A QUERY TO SEE GRAPH-POWERED AGENT INTELLIGENCE
           </div>
-          {DEMO_QUERIES.map((dq, idx) => (
+          {demoQueries.map((dq, idx) => (
             <button key={idx} onClick={() => runQuery(idx)}
               style={{
                 display: "block", width: "100%", textAlign: "left",
@@ -63,7 +77,7 @@ export function QueryView() {
                 <div style={{ fontSize: 10, color: "#FCD34D88", fontFamily: "'IBM Plex Mono', monospace", marginBottom: 12, letterSpacing: "0.1em" }}>
                   ◈ GRAPH TRAVERSAL
                 </div>
-                {DEMO_QUERIES[selectedQuery].thinking.map((step, i) => (
+                {demoQueries[selectedQuery].thinking.map((step, i) => (
                   <div key={i} style={{
                     padding: "8px 12px", marginBottom: 4, borderRadius: 6,
                     background: i < thinkingStep ? "rgba(252,211,77,0.04)" : "rgba(255,255,255,0.01)",
@@ -96,12 +110,12 @@ export function QueryView() {
                     AGENT RESPONSE
                   </div>
                   <div style={{ fontSize: 10, color: "#555", fontFamily: "'IBM Plex Mono', monospace" }}>
-                    {DEMO_QUERIES[selectedQuery].triples} triples traversed · {DEMO_QUERIES[selectedQuery].entities.length} entities resolved
+                    {demoQueries[selectedQuery].triples} triples traversed · {demoQueries[selectedQuery].entities.length} entities resolved
                   </div>
                 </div>
                 <div style={{ fontSize: 14, lineHeight: 1.7, color: "#ddd" }}>
                   <Typewriter
-                    text={DEMO_QUERIES[selectedQuery].answer}
+                    text={demoQueries[selectedQuery].answer}
                     speed={10}
                     onDone={() => setQueryPhase("done")}
                   />
@@ -114,7 +128,14 @@ export function QueryView() {
 
       {/* Graph visualization alongside query */}
       <div style={{ width: "45%", borderLeft: "1px solid rgba(255,255,255,0.06)" }}>
-        <GraphCanvas highlightedEntities={highlightedEntities} onNodeClick={() => {}} activeFilter={null} />
+        <GraphCanvas
+          entities={entities}
+          relationships={relationships}
+          ontology={ontology}
+          highlightedEntities={highlightedEntities}
+          onNodeClick={() => {}}
+          activeFilter={null}
+        />
       </div>
     </div>
   );

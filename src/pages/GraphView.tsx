@@ -1,6 +1,6 @@
 import type { DomainKey, Entity, OntologyDomain } from "../types";
 import { GraphCanvas, NodeDetailPanel } from "../components";
-import { ONTOLOGY, RELATIONSHIPS, getAllEntities } from "../data";
+import { useGraphData, useOntology } from "../state";
 
 interface GraphViewProps {
   activeFilter: DomainKey | null;
@@ -10,9 +10,31 @@ interface GraphViewProps {
 }
 
 export function GraphView({ activeFilter, onFilterChange, selectedNode, onNodeSelect }: GraphViewProps) {
+  const { entities, relationships, isLoading: graphLoading, isError: graphError } = useGraphData();
+  const { ontology, isLoading: ontologyLoading, isError: ontologyError } = useOntology();
+
+  const isLoading = graphLoading || ontologyLoading;
+  const isError = graphError || ontologyError;
+
   const highlightedEntities = selectedNode
-    ? [selectedNode.id, ...RELATIONSHIPS.filter(r => r.from === selectedNode.id || r.to === selectedNode.id).map(r => r.from === selectedNode.id ? r.to : r.from)]
+    ? [selectedNode.id, ...relationships.filter(r => r.from === selectedNode.id || r.to === selectedNode.id).map(r => r.from === selectedNode.id ? r.to : r.from)]
     : [];
+
+  if (isLoading) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#666" }}>
+        Loading graph data...
+      </div>
+    );
+  }
+
+  if (isError || !ontology) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#f66" }}>
+        Error loading graph data
+      </div>
+    );
+  }
 
   return (
     <>
@@ -29,7 +51,7 @@ export function GraphView({ activeFilter, onFilterChange, selectedNode, onNodeSe
             color: !activeFilter ? "#fff" : "#777", fontSize: 11, cursor: "pointer",
             fontFamily: "'IBM Plex Mono', monospace",
           }}>All</button>
-        {(Object.entries(ONTOLOGY) as [DomainKey, OntologyDomain][]).map(([key, data]) => (
+        {(Object.entries(ontology) as [DomainKey, OntologyDomain][]).map(([key, data]) => (
           <button key={key} onClick={() => onFilterChange(activeFilter === key ? null : key)}
             style={{
               padding: "5px 12px", borderRadius: 20,
@@ -42,7 +64,7 @@ export function GraphView({ activeFilter, onFilterChange, selectedNode, onNodeSe
           </button>
         ))}
         <div style={{ marginLeft: "auto", fontSize: 11, color: "#444", fontFamily: "'IBM Plex Mono', monospace" }}>
-          {getAllEntities().length} entities · {RELATIONSHIPS.length} relationships
+          {entities.length} entities · {relationships.length} relationships
         </div>
       </div>
 
@@ -50,6 +72,9 @@ export function GraphView({ activeFilter, onFilterChange, selectedNode, onNodeSe
       <div style={{ display: "flex", height: "calc(100vh - 150px)" }}>
         <div style={{ flex: 1, minWidth: 0, position: "relative", overflow: "hidden" }}>
           <GraphCanvas
+            entities={entities}
+            relationships={relationships}
+            ontology={ontology}
             highlightedEntities={highlightedEntities}
             onNodeClick={(node) => onNodeSelect(selectedNode?.id === node.id ? null : node)}
             activeFilter={activeFilter}

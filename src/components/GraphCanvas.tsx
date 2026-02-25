@@ -1,14 +1,16 @@
-import { useEffect, useRef, useCallback, useMemo, useState, MouseEvent } from "react";
-import type { DomainKey, GraphNode } from "../types";
-import { ONTOLOGY, RELATIONSHIPS, getAllEntities } from "../data";
+import { useEffect, useRef, useCallback, useState, MouseEvent } from "react";
+import type { DomainKey, Entity, GraphNode, OntologyType, Relationship } from "../types";
 
 interface GraphCanvasProps {
+  entities: Entity[];
+  relationships: Relationship[];
+  ontology: OntologyType;
   highlightedEntities: string[];
   onNodeClick: (node: GraphNode) => void;
   activeFilter: DomainKey | null;
 }
 
-export function GraphCanvas({ highlightedEntities, onNodeClick, activeFilter }: GraphCanvasProps) {
+export function GraphCanvas({ entities, relationships, ontology, highlightedEntities, onNodeClick, activeFilter }: GraphCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const nodesRef = useRef<GraphNode[]>([]);
@@ -16,8 +18,6 @@ export function GraphCanvas({ highlightedEntities, onNodeClick, activeFilter }: 
   const hoveredRef = useRef<string | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
-
-  const entities = useMemo(() => getAllEntities(), []);
 
   // Track container size changes
   useEffect(() => {
@@ -60,8 +60,8 @@ export function GraphCanvas({ highlightedEntities, onNodeClick, activeFilter }: 
 
     nodesRef.current = entities.map((e) => {
       const dp = domainPositions[e.domain];
-      const subIdx = ONTOLOGY[e.domain].subclasses.findIndex((s) => s.id === e.id);
-      const total = ONTOLOGY[e.domain].subclasses.length;
+      const subIdx = ontology[e.domain].subclasses.findIndex((s) => s.id === e.id);
+      const total = ontology[e.domain].subclasses.length;
       const angle = ((Math.PI * 2) / total) * subIdx - Math.PI / 2;
       const radius = Math.min(canvas.width, canvas.height) * 0.1;
       return {
@@ -97,7 +97,7 @@ export function GraphCanvas({ highlightedEntities, onNodeClick, activeFilter }: 
 
       // Domain labels
       (Object.entries(domainPositions) as [DomainKey, { x: number; y: number }][]).forEach(([domain, pos]) => {
-        const data = ONTOLOGY[domain];
+        const data = ontology[domain];
         ctx.font = "bold 22px 'IBM Plex Mono', monospace";
         ctx.fillStyle = data.color + "44";
         ctx.textAlign = "center";
@@ -107,8 +107,8 @@ export function GraphCanvas({ highlightedEntities, onNodeClick, activeFilter }: 
       // Draw edges
       const nodes = nodesRef.current;
       const filteredRels = activeFilter
-        ? RELATIONSHIPS.filter((r) => r.domain.includes(activeFilter))
-        : RELATIONSHIPS;
+        ? relationships.filter((r) => r.domain.includes(activeFilter))
+        : relationships;
 
       filteredRels.forEach((rel) => {
         const fromNode = nodes.find((n) => n.id === rel.from);
@@ -154,7 +154,7 @@ export function GraphCanvas({ highlightedEntities, onNodeClick, activeFilter }: 
         const isHighlighted = highlightedEntities && highlightedEntities.includes(node.id);
         const isHovered = hoveredRef.current === node.id;
         const isDimmed = highlightedEntities && highlightedEntities.length > 0 && !isHighlighted;
-        const isFiltered = activeFilter && node.domain !== activeFilter && !RELATIONSHIPS.some(
+        const isFiltered = activeFilter && node.domain !== activeFilter && !relationships.some(
           r => r.domain.includes(activeFilter) && (r.from === node.id || r.to === node.id)
         );
 
@@ -200,7 +200,7 @@ export function GraphCanvas({ highlightedEntities, onNodeClick, activeFilter }: 
 
     draw();
     return () => cancelAnimationFrame(animRef.current);
-  }, [entities, highlightedEntities, activeFilter, containerSize]);
+  }, [entities, relationships, ontology, highlightedEntities, activeFilter, containerSize]);
 
   const handleMouseMove = useCallback((e: MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;

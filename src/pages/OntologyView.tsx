@@ -1,17 +1,31 @@
 import type { DomainKey, OntologyDomain } from "../types";
-import { ONTOLOGY, RELATIONSHIPS, getAllEntities } from "../data";
+import { useOntology, useRelationships, useEntities } from "../state";
 
 export function OntologyView() {
+  const { ontology, isLoading: ontologyLoading } = useOntology();
+  const { relationships, isLoading: relationshipsLoading } = useRelationships();
+  const { entities, isLoading: entitiesLoading } = useEntities();
+
+  const isLoading = ontologyLoading || relationshipsLoading || entitiesLoading;
+
+  if (isLoading || !ontology) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#666" }}>
+        Loading ontology...
+      </div>
+    );
+  }
+
   return (
     <div style={{ flex: 1, padding: "28px", overflowY: "auto", height: "calc(100vh - 110px)" }}>
       <div style={{ maxWidth: 900, margin: "0 auto" }}>
         <div style={{ fontSize: 10, color: "#555", fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.1em", marginBottom: 24 }}>
-          ONTOLOGY SCHEMA · RETAIL INTELLIGENCE DOMAIN
+          ontology SCHEMA · RETAIL INTELLIGENCE DOMAIN
         </div>
 
         {/* Ontology class cards */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 32 }}>
-          {(Object.entries(ONTOLOGY) as [DomainKey, OntologyDomain][]).map(([key, data]) => (
+          {(Object.entries(ontology) as [DomainKey, OntologyDomain][]).map(([key, data]) => (
             <div key={key} style={{
               padding: 24, borderRadius: 12,
               background: "rgba(255,255,255,0.02)",
@@ -63,8 +77,8 @@ export function OntologyView() {
             RELATIONSHIP PREDICATES
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-            {[...new Set(RELATIONSHIPS.map(r => r.predicate))].map((pred) => {
-              const sample = RELATIONSHIPS.find(r => r.predicate === pred)!;
+            {[...new Set(relationships.map(r => r.predicate))].map((pred) => {
+              const sample = relationships.find(r => r.predicate === pred)!;
               const fromDomain = sample.domain[0];
               const toDomain = sample.domain[1];
               return (
@@ -77,9 +91,9 @@ export function OntologyView() {
                     {pred.replace(/_/g, " ")}
                   </div>
                   <div style={{ fontSize: 10, color: "#555" }}>
-                    <span style={{ color: ONTOLOGY[fromDomain].color }}>{ONTOLOGY[fromDomain].label}</span>
+                    <span style={{ color: ontology[fromDomain].color }}>{ontology[fromDomain].label}</span>
                     {" → "}
-                    <span style={{ color: ONTOLOGY[toDomain].color }}>{ONTOLOGY[toDomain].label}</span>
+                    <span style={{ color: ontology[toDomain].color }}>{ontology[toDomain].label}</span>
                   </div>
                 </div>
               );
@@ -97,9 +111,9 @@ export function OntologyView() {
         }}>
           {[
             { label: "Classes", value: 4 },
-            { label: "Instances", value: getAllEntities().length },
-            { label: "Predicates", value: [...new Set(RELATIONSHIPS.map(r => r.predicate))].length },
-            { label: "Triples", value: RELATIONSHIPS.length },
+            { label: "Instances", value: entities.length },
+            { label: "Predicates", value: [...new Set(relationships.map(r => r.predicate))].length },
+            { label: "Triples", value: relationships.length },
           ].map((s) => (
             <div key={s.label} style={{ textAlign: "center" }}>
               <div style={{ fontSize: 24, fontWeight: 700, color: "#fff" }}>{s.value}</div>
