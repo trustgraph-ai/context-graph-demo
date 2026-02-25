@@ -9,22 +9,43 @@ interface GraphCanvasProps {
 }
 
 export function GraphCanvas({ highlightedEntities, onNodeClick, activeFilter }: GraphCanvasProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const nodesRef = useRef<GraphNode[]>([]);
   const animRef = useRef<number>(0);
   const hoveredRef = useRef<string | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
   const entities = useMemo(() => getAllEntities(), []);
 
+  // Track container size changes
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) {
+        setContainerSize({
+          width: entry.contentRect.width,
+          height: entry.contentRect.height,
+        });
+      }
+    });
+
+    resizeObserver.observe(container);
+    return () => resizeObserver.disconnect();
+  }, []);
+
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !canvas.parentElement) return;
-    const rect = canvas.parentElement.getBoundingClientRect();
-    canvas.width = rect.width * 2;
-    canvas.height = rect.height * 2;
-    canvas.style.width = rect.width + "px";
-    canvas.style.height = rect.height + "px";
+    if (!canvas || containerSize.width === 0) return;
+
+    canvas.width = containerSize.width * 2;
+    canvas.height = containerSize.height * 2;
+    canvas.style.width = containerSize.width + "px";
+    canvas.style.height = containerSize.height + "px";
 
     const cx = canvas.width / 2;
     const cy = canvas.height / 2;
@@ -179,7 +200,7 @@ export function GraphCanvas({ highlightedEntities, onNodeClick, activeFilter }: 
 
     draw();
     return () => cancelAnimationFrame(animRef.current);
-  }, [entities, highlightedEntities, activeFilter]);
+  }, [entities, highlightedEntities, activeFilter, containerSize]);
 
   const handleMouseMove = useCallback((e: MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -210,7 +231,7 @@ export function GraphCanvas({ highlightedEntities, onNodeClick, activeFilter }: 
   }, [onNodeClick]);
 
   return (
-    <div style={{ position: "relative", width: "100%", height: "100%" }}>
+    <div ref={containerRef} style={{ position: "relative", width: "100%", height: "100%" }}>
       <canvas
         ref={canvasRef}
         onMouseMove={handleMouseMove}

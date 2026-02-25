@@ -10,7 +10,7 @@ interface NodeDetailPanelProps {
 export function NodeDetailPanel({ node, onClose, onNodeSelect }: NodeDetailPanelProps) {
   return (
     <div style={{
-      width: 320, borderLeft: "1px solid rgba(255,255,255,0.06)",
+      width: 320, flexShrink: 0, borderLeft: "1px solid rgba(255,255,255,0.06)",
       background: "rgba(12,12,18,0.95)", padding: 24, overflowY: "auto",
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>

@@ -48,7 +48,7 @@ export function GraphView({ activeFilter, onFilterChange, selectedNode, onNodeSe
 
       {/* Main Content */}
       <div style={{ display: "flex", height: "calc(100vh - 150px)" }}>
-        <div style={{ flex: 1, position: "relative" }}>
+        <div style={{ flex: 1, minWidth: 0, position: "relative", overflow: "hidden" }}>
           <GraphCanvas
             highlightedEntities={highlightedEntities}
             onNodeClick={(node) => onNodeSelect(selectedNode?.id === node.id ? null : node)}
