@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { GraphCanvas } from "../components";
 import { useGraphData } from "../state";
 import { useChat, useConversation } from "@trustgraph/react-state";
@@ -12,6 +12,7 @@ const QUICK_QUERIES = [
 
 export function QueryView() {
   const [customInput, setCustomInput] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const { entities, relationships, ontology, isLoading: graphLoading } = useGraphData();
   const { submitMessage, isSubmitting } = useChat();
@@ -22,6 +23,11 @@ export function QueryView() {
   useEffect(() => {
     setChatMode("agent");
   }, [setChatMode]);
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   const handleSubmit = (query: string) => {
     if (query.trim() && !isSubmitting) {
@@ -143,6 +149,7 @@ export function QueryView() {
                   Processing...
                 </div>
               )}
+              <div ref={scrollRef} />
             </div>
           )}
         </div>
