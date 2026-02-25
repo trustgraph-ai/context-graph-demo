@@ -50,13 +50,17 @@ export function GraphCanvas({ entities, relationships, ontology, highlightedEnti
     const cx = canvas.width / 2;
     const cy = canvas.height / 2;
 
-    // Position nodes in domain clusters
-    const domainPositions: Record<DomainKey, { x: number; y: number }> = {
-      consumer: { x: cx - cx * 0.35, y: cy - cy * 0.32 },
-      brand: { x: cx + cx * 0.35, y: cy - cy * 0.32 },
-      retail: { x: cx + cx * 0.35, y: cy + cy * 0.32 },
-      agent: { x: cx - cx * 0.35, y: cy + cy * 0.32 },
-    };
+    // Position nodes in domain clusters - arranged in a circle
+    const domainKeys = Object.keys(ontology);
+    const domainPositions: Record<DomainKey, { x: number; y: number }> = {};
+    domainKeys.forEach((domain, i) => {
+      const angle = (Math.PI * 2 * i) / domainKeys.length - Math.PI / 2;
+      const radius = Math.min(cx, cy) * 0.45;
+      domainPositions[domain] = {
+        x: cx + Math.cos(angle) * radius,
+        y: cy + Math.sin(angle) * radius,
+      };
+    });
 
     nodesRef.current = entities.map((e) => {
       const dp = domainPositions[e.domain];
