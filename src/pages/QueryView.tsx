@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { GraphCanvas, NodeDetailPanel } from "../components";
 import { useGraphData } from "../state";
+import { COLLECTION } from "../config";
 import type { Entity } from "../types";
 import { useChat, useConversation, useEmbeddings, useGraphEmbeddings } from "@trustgraph/react-state";
 
@@ -52,7 +53,7 @@ export function QueryView() {
   const { graphEmbeddings, isLoading: graphEmbeddingsLoading } = useGraphEmbeddings({
     vecs: hasEmbeddings ? embeddings : [[]],
     limit: hasEmbeddings ? 10 : 0,
-    collection: "retail",
+    collection: COLLECTION,
   });
 
   // Set chat mode to agent on mount

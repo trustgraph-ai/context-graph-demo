@@ -1,8 +1,6 @@
 import { useMemo } from "react";
 import { useTriples } from "@trustgraph/react-state";
-
-// TrustGraph constants
-const COLLECTION = "retail";
+import { COLLECTION } from "../config";
 const RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
 const RDFS_LABEL = "http://www.w3.org/2000/01/rdf-schema#label";
 const RDFS_DOMAIN = "http://www.w3.org/2000/01/rdf-schema#domain";
