@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { GraphCanvas } from "../components";
 import { useGraphData } from "../state";
-import { useChat, useConversation } from "@trustgraph/react-state";
+import { useChat, useConversation, useEmbeddings, useGraphEmbeddings } from "@trustgraph/react-state";
 
 // Pre-canned queries
 const QUICK_QUERIES = [
@@ -10,14 +10,36 @@ const QUICK_QUERIES = [
   "How do recommendation agents connect brands with consumer segments?",
 ];
 
+// Helper to extract local name from URI
+function uriToId(uri: string): string {
+  const hashIndex = uri.lastIndexOf("#");
+  const slashIndex = uri.lastIndexOf("/");
+  const index = Math.max(hashIndex, slashIndex);
+  return index >= 0 ? uri.substring(index + 1) : uri;
+}
+
 export function QueryView() {
   const [customInput, setCustomInput] = useState("");
+  const [queryForEmbeddings, setQueryForEmbeddings] = useState<string | undefined>(undefined);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { entities, relationships, ontology, isLoading: graphLoading } = useGraphData();
   const { submitMessage, isSubmitting } = useChat();
   const messages = useConversation((state) => state.messages);
   const setChatMode = useConversation((state) => state.setChatMode);
+
+  // Get embeddings for the query text
+  const { embeddings, isLoading: embeddingsLoading } = useEmbeddings({
+    flow: "default",
+    term: queryForEmbeddings,
+  });
+
+  // Get graph entities from embeddings
+  const { graphEmbeddings, isLoading: graphEmbeddingsLoading } = useGraphEmbeddings({
+    vecs: embeddings || [],
+    limit: 10,
+    collection: "retail",
+  });
 
   // Set chat mode to agent on mount
   useEffect(() => {
@@ -31,7 +53,9 @@ export function QueryView() {
 
   const handleSubmit = (query: string) => {
     if (query.trim() && !isSubmitting) {
-      submitMessage({ input: query.trim() });
+      const trimmedQuery = query.trim();
+      submitMessage({ input: trimmedQuery });
+      setQueryForEmbeddings(trimmedQuery);
       setCustomInput("");
     }
   };
@@ -43,9 +67,17 @@ export function QueryView() {
     }
   };
 
-  // Extract entities mentioned in the latest answer for highlighting
-  const highlightedEntities: string[] = [];
-  // TODO: Could parse entity URIs from agent response or use workbench state
+  // Match graph embedding entities to our loaded entities for labels and highlighting
+  const matchedEntities = (graphEmbeddings || [])
+    .map((ge: { entity: string }) => {
+      const entityId = uriToId(ge.entity);
+      const found = entities.find(e => e.id === entityId || e.uri === ge.entity);
+      return found ? { ...found, uri: ge.entity } : null;
+    })
+    .filter(Boolean) as typeof entities;
+
+  // Extract entity IDs for highlighting on graph
+  const highlightedEntities = matchedEntities.map(e => e.id);
 
   if (graphLoading || !ontology) {
     return (
@@ -127,6 +159,42 @@ export function QueryView() {
             </button>
           </div>
         </div>
+
+        {/* Related entities from graph embeddings */}
+        {queryForEmbeddings && (
+          <div style={{ padding: "16px 28px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+            <div style={{ fontSize: 10, color: "#555", fontFamily: "'IBM Plex Mono', monospace", marginBottom: 10, letterSpacing: "0.1em" }}>
+              RELATED ENTITIES {(embeddingsLoading || graphEmbeddingsLoading) && <span style={{ color: "#FCD34D" }}>loading...</span>}
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {matchedEntities.length === 0 && !embeddingsLoading && !graphEmbeddingsLoading && (
+                <span style={{ fontSize: 11, color: "#555", fontStyle: "italic" }}>No related entities found</span>
+              )}
+              {matchedEntities.map((entity) => (
+                <button
+                  key={entity.id}
+                  onClick={() => {/* TODO: could highlight or navigate */}}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 6,
+                    border: `1px solid ${entity.color}44`,
+                    background: `${entity.color}15`,
+                    color: entity.color,
+                    cursor: "pointer",
+                    fontSize: 11,
+                    fontFamily: "'IBM Plex Mono', monospace",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  <span style={{ fontSize: 10 }}>{entity.icon}</span>
+                  {entity.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Response area */}
         <div style={{ flex: 1, padding: "24px 28px", overflowY: "auto" }}>
