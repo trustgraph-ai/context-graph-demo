@@ -1,5 +1,5 @@
 // ── Domain Types ─────────────────────────────────────────────────
-export type DomainKey = "consumer" | "brand" | "retail" | "agent";
+export type DomainKey = string;
 
 export interface EntityProps {
   [key: string]: string | number;
