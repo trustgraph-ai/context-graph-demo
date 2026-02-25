@@ -1,20 +1,10 @@
 import { useMemo } from "react";
 import { useTriples } from "@trustgraph/react-state";
+import { useOntologySchema } from "./useOntologySchema";
 import type { Relationship, DomainKey } from "../types";
 
 // TrustGraph constants
 const COLLECTION = "retail";
-const NS = "http://trustgraph.ai/retail#";
-
-// Known object properties (relationships)
-const OBJECT_PROPERTIES = new Set([
-  `${NS}hasAffinityFor`, `${NS}frequents`, `${NS}purchasesFrom`, `${NS}advocatesFor`, `${NS}loyalTo`,
-  `${NS}shopsVia`, `${NS}discoversThrough`, `${NS}experiences`, `${NS}memberOf`,
-  `${NS}merchandisesIn`, `${NS}activatesVia`, `${NS}promotesOn`, `${NS}sellsThrough`, `${NS}rewardsVia`,
-  `${NS}recommendsTo`, `${NS}personalizesFor`, `${NS}monitorsSentimentOf`, `${NS}optimizesJourneyFor`,
-  `${NS}orchestratesCampaignFor`, `${NS}analyzesPerceptionOf`, `${NS}curatesProductsFor`,
-  `${NS}tailorsExperienceAt`, `${NS}deploysCampaignAt`, `${NS}optimizesFlowAt`,
-]);
 
 // Helper to extract value from a Term
 function getTermValue(term: { t: string; i?: string; v?: string }): string {
@@ -31,7 +21,10 @@ function uriToId(uri: string): string {
 
 // Helper to extract predicate name from URI
 function predicateToName(uri: string): string {
-  const name = uri.replace(NS, "");
+  const hashIndex = uri.lastIndexOf("#");
+  const slashIndex = uri.lastIndexOf("/");
+  const index = Math.max(hashIndex, slashIndex);
+  const name = index >= 0 ? uri.substring(index + 1) : uri;
   return name.replace(/([a-z])([A-Z])/g, "$1_$2").toLowerCase();
 }
 
@@ -52,6 +45,9 @@ function idToUri(entityId: string): string {
 export function useEntityRelationships(entityId: string | undefined) {
   const entityUri = entityId ? idToUri(entityId) : undefined;
 
+  // Get the schema to know which predicates are object properties
+  const { schema } = useOntologySchema();
+
   // Query for outgoing relationships (entity is subject)
   const outgoingTriples = useTriples({
     s: entityUri ? { t: "i", i: entityUri } : undefined,
@@ -71,10 +67,11 @@ export function useEntityRelationships(entityId: string | undefined) {
   const error = outgoingTriples.error || incomingTriples.error;
 
   const { incoming, outgoing } = useMemo(() => {
-    if (!entityId) {
+    if (!entityId || !schema) {
       return { incoming: [], outgoing: [] };
     }
 
+    const objectPropertyUris = schema.objectPropertyUris;
     const outgoing: Relationship[] = [];
     const incoming: Relationship[] = [];
 
@@ -83,7 +80,8 @@ export function useEntityRelationships(entityId: string | undefined) {
       const predicate = getTermValue(triple.p);
       const targetUri = getTermValue(triple.o);
 
-      if (OBJECT_PROPERTIES.has(predicate)) {
+      // Only include if predicate is an object property
+      if (objectPropertyUris.has(predicate)) {
         const fromDomain = uriToDomain(entityId);
         const toDomain = uriToDomain(targetUri);
 
@@ -102,7 +100,8 @@ export function useEntityRelationships(entityId: string | undefined) {
       const predicate = getTermValue(triple.p);
       const sourceUri = getTermValue(triple.s);
 
-      if (OBJECT_PROPERTIES.has(predicate)) {
+      // Only include if predicate is an object property
+      if (objectPropertyUris.has(predicate)) {
         const fromDomain = uriToDomain(sourceUri);
         const toDomain = uriToDomain(entityId);
 
@@ -117,7 +116,7 @@ export function useEntityRelationships(entityId: string | undefined) {
     }
 
     return { incoming, outgoing };
-  }, [entityId, outgoingTriples.triples, incomingTriples.triples]);
+  }, [entityId, schema, outgoingTriples.triples, incomingTriples.triples]);
 
   return {
     incoming,
