@@ -1,39 +1,47 @@
-import { useState } from "react";
-import type { QueryPhase } from "../types";
-import { GraphCanvas, Typewriter } from "../components";
-import { useGraphData, useDemoQueries } from "../state";
+import { useState, useEffect } from "react";
+import { GraphCanvas } from "../components";
+import { useGraphData } from "../state";
+import { useChat, useConversation } from "@trustgraph/react-state";
+
+// Pre-canned queries
+const QUICK_QUERIES = [
+  "Which consumers have the highest loyalty scores and what brands do they prefer?",
+  "What retail channels are most effective for reaching eco-conscious consumers?",
+  "How do recommendation agents connect brands with consumer segments?",
+];
 
 export function QueryView() {
-  const [selectedQuery, setSelectedQuery] = useState<number | null>(null);
-  const [queryPhase, setQueryPhase] = useState<QueryPhase>("idle");
-  const [thinkingStep, setThinkingStep] = useState(0);
+  const [customInput, setCustomInput] = useState("");
 
   const { entities, relationships, ontology, isLoading: graphLoading } = useGraphData();
-  const { queries: demoQueries, isLoading: queriesLoading } = useDemoQueries();
+  const { submitMessage, isSubmitting } = useChat();
+  const messages = useConversation((state) => state.messages);
+  const setChatMode = useConversation((state) => state.setChatMode);
 
-  const isLoading = graphLoading || queriesLoading;
+  // Set chat mode to agent on mount
+  useEffect(() => {
+    setChatMode("agent");
+  }, [setChatMode]);
 
-  const runQuery = (idx: number) => {
-    setSelectedQuery(idx);
-    setQueryPhase("thinking");
-    setThinkingStep(0);
-    const q = demoQueries[idx];
-    let step = 0;
-    const interval = setInterval(() => {
-      step++;
-      if (step >= q.thinking.length) {
-        clearInterval(interval);
-        setTimeout(() => setQueryPhase("answering"), 400);
-      }
-      setThinkingStep(step);
-    }, 800);
+  const handleSubmit = (query: string) => {
+    if (query.trim() && !isSubmitting) {
+      submitMessage({ input: query.trim() });
+      setCustomInput("");
+    }
   };
 
-  const highlightedEntities = selectedQuery !== null && queryPhase !== "idle"
-    ? demoQueries[selectedQuery].entities
-    : [];
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(customInput);
+    }
+  };
 
-  if (isLoading || !ontology) {
+  // Extract entities mentioned in the latest answer for highlighting
+  const highlightedEntities: string[] = [];
+  // TODO: Could parse entity URIs from agent response or use workbench state
+
+  if (graphLoading || !ontology) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#666" }}>
         Loading...
@@ -44,88 +52,103 @@ export function QueryView() {
   return (
     <div style={{ display: "flex", height: "calc(100vh - 110px)" }}>
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-        {/* Query selector */}
+        {/* Query input area */}
         <div style={{ padding: "20px 28px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
           <div style={{ fontSize: 10, color: "#555", fontFamily: "'IBM Plex Mono', monospace", marginBottom: 12, letterSpacing: "0.1em" }}>
-            SELECT A QUERY TO SEE GRAPH-POWERED AGENT INTELLIGENCE
+            QUICK QUERIES
           </div>
-          {demoQueries.map((dq, idx) => (
-            <button key={idx} onClick={() => runQuery(idx)}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+            {QUICK_QUERIES.map((q, idx) => (
+              <button
+                key={idx}
+                onClick={() => handleSubmit(q)}
+                disabled={isSubmitting}
+                style={{
+                  padding: "8px 14px", borderRadius: 8,
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  background: "rgba(255,255,255,0.02)",
+                  color: isSubmitting ? "#555" : "#aaa",
+                  cursor: isSubmitting ? "not-allowed" : "pointer",
+                  fontSize: 12, lineHeight: 1.4,
+                  fontFamily: "'IBM Plex Sans', sans-serif",
+                  textAlign: "left",
+                  transition: "all 0.2s",
+                  maxWidth: "100%",
+                }}
+              >
+                <span style={{ color: "#FCD34D88", fontFamily: "'IBM Plex Mono', monospace", fontSize: 10 }}>⚡</span>{" "}
+                {q}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ display: "flex", gap: 8 }}>
+            <input
+              type="text"
+              value={customInput}
+              onChange={(e) => setCustomInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Type your own question..."
+              disabled={isSubmitting}
               style={{
-                display: "block", width: "100%", textAlign: "left",
-                padding: "12px 16px", marginBottom: 8, borderRadius: 8,
-                border: `1px solid ${selectedQuery === idx ? '#FCD34D33' : 'rgba(255,255,255,0.06)'}`,
-                background: selectedQuery === idx ? "rgba(252,211,77,0.05)" : "rgba(255,255,255,0.02)",
-                color: selectedQuery === idx ? "#FCD34D" : "#bbb",
-                cursor: "pointer", fontSize: 13, lineHeight: 1.5,
+                flex: 1,
+                padding: "12px 16px",
+                borderRadius: 8,
+                border: "1px solid rgba(255,255,255,0.1)",
+                background: "rgba(255,255,255,0.02)",
+                color: "#ddd",
+                fontSize: 14,
                 fontFamily: "'IBM Plex Sans', sans-serif",
-                transition: "all 0.2s",
-              }}>
-              <span style={{ color: "#FCD34D88", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11 }}>⚡ QUERY {idx + 1}</span><br />
-              {dq.q}
+                outline: "none",
+              }}
+            />
+            <button
+              onClick={() => handleSubmit(customInput)}
+              disabled={isSubmitting || !customInput.trim()}
+              style={{
+                padding: "12px 20px",
+                borderRadius: 8,
+                border: "1px solid #FCD34D44",
+                background: isSubmitting || !customInput.trim() ? "rgba(255,255,255,0.02)" : "rgba(252,211,77,0.1)",
+                color: isSubmitting || !customInput.trim() ? "#555" : "#FCD34D",
+                cursor: isSubmitting || !customInput.trim() ? "not-allowed" : "pointer",
+                fontSize: 13,
+                fontWeight: 600,
+                fontFamily: "'IBM Plex Mono', monospace",
+              }}
+            >
+              {isSubmitting ? "..." : "Ask"}
             </button>
-          ))}
+          </div>
         </div>
 
         {/* Response area */}
-        {selectedQuery !== null && (
-          <div style={{ flex: 1, padding: "24px 28px", overflowY: "auto" }}>
-            {/* Graph traversal steps */}
-            {(queryPhase === "thinking" || queryPhase === "answering" || queryPhase === "done") && (
-              <div style={{ marginBottom: 24 }}>
-                <div style={{ fontSize: 10, color: "#FCD34D88", fontFamily: "'IBM Plex Mono', monospace", marginBottom: 12, letterSpacing: "0.1em" }}>
-                  ◈ GRAPH TRAVERSAL
+        <div style={{ flex: 1, padding: "24px 28px", overflowY: "auto" }}>
+          {messages.length === 0 ? (
+            <div style={{ color: "#444", fontSize: 13, fontStyle: "italic" }}>
+              Select a quick query or type your own question to get started.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {messages.map((msg, idx) => (
+                <MessageBubble key={idx} message={msg} />
+              ))}
+              {isSubmitting && (
+                <div style={{
+                  padding: "8px 12px",
+                  fontSize: 11,
+                  color: "#FCD34D66",
+                  fontFamily: "'IBM Plex Mono', monospace"
+                }}>
+                  Processing...
                 </div>
-                {demoQueries[selectedQuery].thinking.map((step, i) => (
-                  <div key={i} style={{
-                    padding: "8px 12px", marginBottom: 4, borderRadius: 6,
-                    background: i < thinkingStep ? "rgba(252,211,77,0.04)" : "rgba(255,255,255,0.01)",
-                    borderLeft: `2px solid ${i < thinkingStep ? '#FCD34D44' : 'rgba(255,255,255,0.04)'}`,
-                    opacity: i < thinkingStep ? 1 : 0.3,
-                    transition: "all 0.4s",
-                    fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "#aaa",
-                  }}>
-                    {i < thinkingStep && <span style={{ color: "#6EE7B7", marginRight: 8 }}>✓</span>}
-                    {step}
-                  </div>
-                ))}
-                {queryPhase === "thinking" && (
-                  <div style={{ marginTop: 8, fontSize: 11, color: "#FCD34D66", fontFamily: "'IBM Plex Mono', monospace" }}>
-                    Traversing graph...
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Answer */}
-            {(queryPhase === "answering" || queryPhase === "done") && (
-              <div style={{
-                padding: 20, borderRadius: 10,
-                background: "linear-gradient(135deg, rgba(252,211,77,0.04) 0%, rgba(110,231,183,0.04) 100%)",
-                border: "1px solid rgba(252,211,77,0.12)",
-              }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12, alignItems: "center" }}>
-                  <div style={{ fontSize: 10, color: "#FCD34D88", fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.1em" }}>
-                    AGENT RESPONSE
-                  </div>
-                  <div style={{ fontSize: 10, color: "#555", fontFamily: "'IBM Plex Mono', monospace" }}>
-                    {demoQueries[selectedQuery].triples} triples traversed · {demoQueries[selectedQuery].entities.length} entities resolved
-                  </div>
-                </div>
-                <div style={{ fontSize: 14, lineHeight: 1.7, color: "#ddd" }}>
-                  <Typewriter
-                    text={demoQueries[selectedQuery].answer}
-                    speed={10}
-                    onDone={() => setQueryPhase("done")}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Graph visualization alongside query */}
+      {/* Graph visualization */}
       <div style={{ width: "45%", borderLeft: "1px solid rgba(255,255,255,0.06)" }}>
         <GraphCanvas
           entities={entities}
@@ -135,6 +158,93 @@ export function QueryView() {
           onNodeClick={() => {}}
           activeFilter={null}
         />
+      </div>
+    </div>
+  );
+}
+
+// Message bubble component
+function MessageBubble({ message }: { message: { role: string; text: string; type?: string } }) {
+  const isUser = message.role === "human";
+  const messageType = message.type;
+
+  const getTypeStyles = () => {
+    switch (messageType) {
+      case "thinking":
+        return {
+          bg: "rgba(147,197,253,0.08)",
+          border: "rgba(147,197,253,0.2)",
+          icon: "◈",
+          label: "THINKING",
+          color: "#93C5FD",
+        };
+      case "observation":
+        return {
+          bg: "rgba(196,181,253,0.08)",
+          border: "rgba(196,181,253,0.2)",
+          icon: "◉",
+          label: "OBSERVATION",
+          color: "#C4B5FD",
+        };
+      case "answer":
+        return {
+          bg: "rgba(110,231,183,0.08)",
+          border: "rgba(110,231,183,0.2)",
+          icon: "✓",
+          label: "ANSWER",
+          color: "#6EE7B7",
+        };
+      default:
+        return null;
+    }
+  };
+
+  const typeStyles = getTypeStyles();
+
+  if (isUser) {
+    return (
+      <div style={{
+        padding: "12px 16px",
+        borderRadius: 10,
+        background: "rgba(252,211,77,0.08)",
+        border: "1px solid rgba(252,211,77,0.2)",
+        alignSelf: "flex-end",
+        maxWidth: "80%",
+      }}>
+        <div style={{ fontSize: 10, color: "#FCD34D88", fontFamily: "'IBM Plex Mono', monospace", marginBottom: 6 }}>
+          YOU
+        </div>
+        <div style={{ fontSize: 14, color: "#ddd", lineHeight: 1.5 }}>
+          {message.text}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      padding: "12px 16px",
+      borderRadius: 10,
+      background: typeStyles?.bg || "rgba(255,255,255,0.02)",
+      border: `1px solid ${typeStyles?.border || "rgba(255,255,255,0.06)"}`,
+      maxWidth: "90%",
+    }}>
+      {typeStyles && (
+        <div style={{
+          fontSize: 10,
+          color: typeStyles.color + "88",
+          fontFamily: "'IBM Plex Mono', monospace",
+          marginBottom: 6,
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+        }}>
+          <span style={{ color: typeStyles.color }}>{typeStyles.icon}</span>
+          {typeStyles.label}
+        </div>
+      )}
+      <div style={{ fontSize: 13, color: "#bbb", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+        {message.text}
       </div>
     </div>
   );
