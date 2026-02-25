@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
-import { GraphCanvas } from "../components";
+import { GraphCanvas, NodeDetailPanel } from "../components";
 import { useGraphData } from "../state";
+import type { Entity } from "../types";
 import { useChat, useConversation, useEmbeddings, useGraphEmbeddings } from "@trustgraph/react-state";
 
 // Pre-canned queries
@@ -32,9 +33,10 @@ export function QueryView() {
   const [customInput, setCustomInput] = useState("");
   const [queryForEmbeddings, setQueryForEmbeddings] = useState<string | undefined>(undefined);
   const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null);
+  const [selectedNode, setSelectedNode] = useState<Entity | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const { entities, relationships, ontology, isLoading: graphLoading } = useGraphData();
+  const { entities, relationships, ontology, propertyLabels, isLoading: graphLoading } = useGraphData();
   const { submitMessage, isSubmitting } = useChat();
   const messages = useConversation((state) => state.messages);
   const setChatMode = useConversation((state) => state.setChatMode);
@@ -69,6 +71,7 @@ export function QueryView() {
       submitMessage({ input: trimmedQuery });
       setQueryForEmbeddings(trimmedQuery);
       setSelectedEntityId(null);
+      setSelectedNode(null);
       setCustomInput("");
     }
   };
@@ -108,17 +111,18 @@ export function QueryView() {
   }
 
   // Extract entity IDs for highlighting on graph
-  // If an entity is selected, highlight it and all connected entities; otherwise highlight all embedding results
+  // Priority: selectedNode (graph click) > selectedEntityId (button click) > all embedding results
   const highlightedEntities = (() => {
-    if (!selectedEntityId) {
+    const focusId = selectedNode?.id || selectedEntityId;
+    if (!focusId) {
       return embeddingResults.map(e => e.id);
     }
-    // Find all entities connected to the selected entity
-    const connected = new Set<string>([selectedEntityId]);
+    // Find all entities connected to the focused entity
+    const connected = new Set<string>([focusId]);
     for (const rel of relationships) {
-      if (rel.from === selectedEntityId) {
+      if (rel.from === focusId) {
         connected.add(rel.to);
-      } else if (rel.to === selectedEntityId) {
+      } else if (rel.to === focusId) {
         connected.add(rel.from);
       }
     }
@@ -221,7 +225,10 @@ export function QueryView() {
                 return (
                   <button
                     key={item.uri}
-                    onClick={() => setSelectedEntityId(isSelected ? null : item.id)}
+                    onClick={() => {
+                      setSelectedEntityId(isSelected ? null : item.id);
+                      setSelectedNode(null);
+                    }}
                     style={{
                       padding: "6px 12px",
                       borderRadius: 6,
@@ -274,16 +281,33 @@ export function QueryView() {
       </div>
 
       {/* Graph visualization */}
-      <div style={{ width: "45%", borderLeft: "1px solid rgba(255,255,255,0.06)" }}>
+      <div style={{ width: selectedNode ? "30%" : "45%", borderLeft: "1px solid rgba(255,255,255,0.06)", transition: "width 0.2s" }}>
         <GraphCanvas
           entities={entities}
           relationships={relationships}
           ontology={ontology}
           highlightedEntities={highlightedEntities}
-          onNodeClick={() => {}}
+          onNodeClick={(node) => {
+            setSelectedNode(selectedNode?.id === node.id ? null : node);
+            setSelectedEntityId(null);
+          }}
           activeFilter={null}
         />
       </div>
+      {selectedNode && (
+        <NodeDetailPanel
+          node={selectedNode}
+          relationships={relationships}
+          entities={entities}
+          ontology={ontology}
+          propertyLabels={propertyLabels}
+          onClose={() => setSelectedNode(null)}
+          onNodeSelect={(node) => {
+            setSelectedNode(node);
+            setSelectedEntityId(null);
+          }}
+        />
+      )}
     </div>
   );
 }
