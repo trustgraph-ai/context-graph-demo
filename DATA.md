@@ -1,7 +1,7 @@
 
-tg-start-flow -n everything -i retail -d 'Retail processing'
+tg-start-flow -n ontology -i retail -d 'Retail processing'
 
-tg-set-collection -n retail -d 'Retail intelligence'
+tg-set-collection -n Retail -d 'Retail intelligence' retail
 
 # Load test data files
 
