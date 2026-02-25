@@ -3,6 +3,3 @@ export { useGraphData } from "./useGraphData";
 
 // Schema hook - for OWL ontology schema view
 export { useOntologySchema } from "./useOntologySchema";
-
-// Query hook
-export { useDemoQueries } from "./useDemoQueries";
