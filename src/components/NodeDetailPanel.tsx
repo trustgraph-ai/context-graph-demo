@@ -34,7 +34,7 @@ export function NodeDetailPanel({ node, relationships, entities, ontology, onClo
         {Object.entries(node.props || {}).map(([k, v]) => (
           <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
             <span style={{ fontSize: 12, color: "#888" }}>{k}</span>
-            <span style={{ fontSize: 12, color: "#ddd", fontFamily: "'IBM Plex Mono', monospace" }}>{String(v)}</span>
+            <span style={{ fontSize: 12, color: "#ddd", fontFamily: "'IBM Plex Mono', monospace", textAlign: "right" }}>{String(v)}</span>
           </div>
         ))}
       </div>
