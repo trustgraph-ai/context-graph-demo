@@ -65,6 +65,13 @@ export function QueryView() {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Auto-select first embedding result when results arrive
+  useEffect(() => {
+    if (embeddingResults.length > 0 && !selectedEntityId && !selectedNode) {
+      setSelectedEntityId(embeddingResults[0].id);
+    }
+  }, [embeddingResults.length]);
+
   const handleSubmit = (query: string) => {
     if (query.trim() && !isSubmitting) {
       const trimmedQuery = query.trim();
