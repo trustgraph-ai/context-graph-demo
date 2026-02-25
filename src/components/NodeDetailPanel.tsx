@@ -5,11 +5,12 @@ interface NodeDetailPanelProps {
   relationships: Relationship[];
   entities: Entity[];
   ontology: OntologyType;
+  propertyLabels: Record<string, string>;
   onClose: () => void;
   onNodeSelect: (node: Entity) => void;
 }
 
-export function NodeDetailPanel({ node, relationships, entities, ontology, onClose, onNodeSelect }: NodeDetailPanelProps) {
+export function NodeDetailPanel({ node, relationships, entities, ontology, propertyLabels, onClose, onNodeSelect }: NodeDetailPanelProps) {
   // Filter relationships for this node
   const nodeRelationships = relationships.filter(
     r => r.from === node.id || r.to === node.id
@@ -33,7 +34,7 @@ export function NodeDetailPanel({ node, relationships, entities, ontology, onClo
         <div style={{ fontSize: 10, color: "#555", fontFamily: "'IBM Plex Mono', monospace", marginBottom: 10, letterSpacing: "0.1em" }}>PROPERTIES</div>
         {Object.entries(node.props || {}).map(([k, v]) => (
           <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-            <span style={{ fontSize: 12, color: "#888" }}>{k}</span>
+            <span style={{ fontSize: 12, color: "#888" }}>{propertyLabels[k] || k}</span>
             <span style={{ fontSize: 12, color: "#ddd", fontFamily: "'IBM Plex Mono', monospace", textAlign: "right" }}>{String(v)}</span>
           </div>
         ))}

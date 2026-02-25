@@ -7,6 +7,8 @@ const COLLECTION = "retail";
 const NS = "http://trustgraph.ai/retail#";
 const RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
 const RDFS_LABEL = "http://www.w3.org/2000/01/rdf-schema#label";
+const OWL_DATATYPE_PROPERTY = "http://www.w3.org/2002/07/owl#DatatypeProperty";
+const OWL_OBJECT_PROPERTY = "http://www.w3.org/2002/07/owl#ObjectProperty";
 
 // Domain configuration - maps class URIs to domain metadata
 const DOMAIN_CONFIG: Record<string, { domain: DomainKey; color: string; glow: string; icon: string; description: string }> = {
@@ -76,17 +78,43 @@ export function useGraphData(domain?: DomainKey) {
   const error = allTriples.error;
 
   // Process all data from the single query
-  const { entities, relationships, ontology } = useMemo(() => {
+  const { entities, relationships, ontology, propertyLabels } = useMemo(() => {
     if (isLoading || !allTriples.triples) {
-      return { entities: [], relationships: [], ontology: undefined };
+      return { entities: [], relationships: [], ontology: undefined, propertyLabels: {} };
     }
 
-    // First pass: find all entities by their rdf:type
+    // First pass: collect all labels and find property URIs
+    const allLabels = new Map<string, string>();
+    const propertyUris = new Set<string>();
+
+    for (const triple of allTriples.triples) {
+      const subjectUri = getTermValue(triple.s);
+      const predicate = getTermValue(triple.p);
+      const objectUri = getTermValue(triple.o);
+
+      if (predicate === RDFS_LABEL) {
+        allLabels.set(subjectUri, getTermValue(triple.o));
+      } else if (predicate === RDF_TYPE && (objectUri === OWL_DATATYPE_PROPERTY || objectUri === OWL_OBJECT_PROPERTY)) {
+        propertyUris.add(subjectUri);
+      }
+    }
+
+    // Build property labels map: local name -> label
+    const propertyLabels: Record<string, string> = {};
+    for (const propUri of propertyUris) {
+      const localName = uriToId(propUri);
+      const label = allLabels.get(propUri);
+      if (label) {
+        propertyLabels[localName] = label;
+      }
+    }
+
+    // Second pass: find entities and their properties
     const entityMap = new Map<string, Entity>();
     const entityLabels = new Map<string, string>();
     const entityProps = new Map<string, Record<string, string | number>>();
 
-    // Collect labels and props first
+    // Collect labels and props
     for (const triple of allTriples.triples) {
       const subjectUri = getTermValue(triple.s);
       const predicate = getTermValue(triple.p);
@@ -216,13 +244,14 @@ export function useGraphData(domain?: DomainKey) {
       },
     };
 
-    return { entities, relationships, ontology };
+    return { entities, relationships, ontology, propertyLabels };
   }, [isLoading, allTriples.triples, domain]);
 
   return {
     entities,
     relationships,
     ontology,
+    propertyLabels,
     isLoading,
     isError,
     error,

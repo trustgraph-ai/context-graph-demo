@@ -10,7 +10,7 @@ interface GraphViewProps {
 }
 
 export function GraphView({ activeFilter, onFilterChange, selectedNode, onNodeSelect }: GraphViewProps) {
-  const { entities, relationships, ontology, isLoading, isError } = useGraphData();
+  const { entities, relationships, ontology, propertyLabels, isLoading, isError } = useGraphData();
 
   const highlightedEntities = selectedNode
     ? [selectedNode.id, ...relationships.filter(r => r.from === selectedNode.id || r.to === selectedNode.id).map(r => r.from === selectedNode.id ? r.to : r.from)]
@@ -82,6 +82,7 @@ export function GraphView({ activeFilter, onFilterChange, selectedNode, onNodeSe
             relationships={relationships}
             entities={entities}
             ontology={ontology}
+            propertyLabels={propertyLabels}
             onClose={() => onNodeSelect(null)}
             onNodeSelect={onNodeSelect}
           />
