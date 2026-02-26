@@ -240,7 +240,7 @@ export function DataView() {
                   </div>
 
                   {/* Results List */}
-                  <div style={{ maxHeight: 400, overflowY: "auto" }}>
+                  <div>
                     {schemaMatches.map((match, idx) => (
                       <div
                         key={idx}
