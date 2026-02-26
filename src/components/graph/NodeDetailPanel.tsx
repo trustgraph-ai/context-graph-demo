@@ -1,5 +1,5 @@
-import type { Entity, Relationship, OntologyType } from "../types";
-import { SectionLabel } from "./SectionLabel";
+import type { Entity, Relationship, OntologyType } from "../../types";
+import { SectionLabel } from "../common";
 
 interface NodeDetailPanelProps {
   node: Entity;

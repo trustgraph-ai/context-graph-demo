@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback, useState, MouseEvent } from "react";
-import type { DomainKey, Entity, GraphNode, OntologyType, Relationship } from "../types";
+import type { DomainKey, Entity, GraphNode, OntologyType, Relationship } from "../../types";
 
 interface GraphCanvasProps {
   entities: Entity[];

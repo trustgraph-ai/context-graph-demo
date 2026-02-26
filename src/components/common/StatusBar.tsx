@@ -1,4 +1,4 @@
-import { useGraphData } from "../state";
+import { useGraphData } from "../../state";
 
 export function StatusBar() {
   const { ontology, isLoading } = useGraphData();
