@@ -1,5 +1,5 @@
 import type { DomainKey, OntologyDomain } from "../types";
-import { SectionLabel } from "../components";
+import { SectionLabel, Card, Badge } from "../components";
 import { useGraphData, useOntologySchema } from "../state";
 
 // Helper to get local name from URI
@@ -41,11 +41,7 @@ export function OntologyView() {
               .map(p => p.label);
 
             return (
-              <div key={key} style={{
-                padding: 24, borderRadius: 12,
-                background: "rgba(255,255,255,0.02)",
-                border: `1px solid ${data.color}22`,
-              }}>
+              <Card key={key} borderColor={data.color + "22"}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                   <span style={{ fontSize: 24 }}>{data.icon}</span>
                   <div>
@@ -57,12 +53,7 @@ export function OntologyView() {
                 <SectionLabel marginBottom={8}>PROPERTIES ({domainProps.length})</SectionLabel>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                   {domainProps.map((p) => (
-                    <span key={p} style={{
-                      padding: "3px 8px", borderRadius: 4, fontSize: 10,
-                      background: data.color + "10", color: data.color + "cc",
-                      fontFamily: "'IBM Plex Mono', monospace",
-                      border: `1px solid ${data.color}22`,
-                    }}>{p}</span>
+                    <Badge key={p} color={data.color} size="small">{p}</Badge>
                   ))}
                 </div>
                 <SectionLabel marginTop={14} marginBottom={8}>INSTANCES ({data.subclasses.length})</SectionLabel>
@@ -76,17 +67,13 @@ export function OntologyView() {
                     <span style={{ color: "#555", fontFamily: "'IBM Plex Mono', monospace", fontSize: 10 }}>{sc.id}</span>
                   </div>
                 ))}
-              </div>
+              </Card>
             );
           })}
         </div>
 
         {/* Relationship predicates (Object Properties) */}
-        <div style={{
-          padding: 24, borderRadius: 12,
-          background: "rgba(255,255,255,0.02)",
-          border: "1px solid rgba(255,255,255,0.06)",
-        }}>
+        <Card borderColor="rgba(255,255,255,0.06)">
           <SectionLabel marginBottom={16}>RELATIONSHIP PREDICATES ({schema.objectProperties.length})</SectionLabel>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
             {schema.objectProperties.map((prop) => {
@@ -94,11 +81,7 @@ export function OntologyView() {
               const toDomain = prop.range ? getLocalName(prop.range).toLowerCase() as DomainKey : null;
 
               return (
-                <div key={prop.uri} style={{
-                  padding: "10px 12px", borderRadius: 6,
-                  background: "rgba(255,255,255,0.02)",
-                  border: "1px solid rgba(255,255,255,0.04)",
-                }}>
+                <Card key={prop.uri} padding="10px 12px" borderRadius={6}>
                   <div style={{ fontSize: 12, color: "#ccc", fontFamily: "'IBM Plex Mono', monospace", marginBottom: 4 }}>
                     {prop.label}
                   </div>
@@ -111,11 +94,11 @@ export function OntologyView() {
                       <span style={{ color: ontology[toDomain].color }}>{ontology[toDomain].label}</span>
                     )}
                   </div>
-                </div>
+                </Card>
               );
             })}
           </div>
-        </div>
+        </Card>
 
         {/* Triple count summary */}
         <div style={{

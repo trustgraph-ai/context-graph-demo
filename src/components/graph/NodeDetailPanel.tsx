@@ -1,5 +1,5 @@
 import type { Entity, Relationship, OntologyType } from "../../types";
-import { SectionLabel } from "../common";
+import { SectionLabel, Card } from "../common";
 
 interface NodeDetailPanelProps {
   node: Entity;
@@ -47,18 +47,20 @@ export function NodeDetailPanel({ node, relationships, entities, ontology, prope
           const other = entities.find(e => e.id === otherId);
           const direction = r.from === node.id ? "→" : "←";
           return (
-            <div key={i} style={{
-              padding: "8px 10px", marginBottom: 4, borderRadius: 6,
-              background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.04)",
-              cursor: "pointer",
-            }} onClick={() => { if (other) onNodeSelect(other); }}>
+            <Card
+              key={i}
+              padding="8px 10px"
+              borderRadius={6}
+              onClick={() => { if (other) onNodeSelect(other); }}
+              style={{ marginBottom: 4 }}
+            >
               <div style={{ fontSize: 11, color: "#aaa" }}>
                 <span style={{ color: other?.color || "#888" }}>{direction} {other?.label}</span>
               </div>
               <div style={{ fontSize: 10, color: "#666", fontFamily: "'IBM Plex Mono', monospace", marginTop: 2 }}>
                 {r.predicate.replace(/_/g, " ")}
               </div>
-            </div>
+            </Card>
           );
         })}
       </div>

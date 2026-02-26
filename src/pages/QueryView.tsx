@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { GraphCanvas, NodeDetailPanel, SectionLabel } from "../components";
+import { GraphCanvas, NodeDetailPanel, SectionLabel, Badge } from "../components";
 import { useGraphData } from "../state";
 import { COLLECTION } from "../config";
 import type { Entity } from "../types";
@@ -198,30 +198,18 @@ export function QueryView() {
               {embeddingResults.map((item) => {
                 const isSelected = selectedEntityId === item.id;
                 return (
-                  <button
+                  <Badge
                     key={item.uri}
+                    color={item.color}
+                    selected={isSelected}
                     onClick={() => {
                       setSelectedEntityId(isSelected ? null : item.id);
                       setSelectedNode(null);
                     }}
-                    style={{
-                      padding: "6px 12px",
-                      borderRadius: 6,
-                      border: `1px solid ${isSelected ? item.color : item.color + "44"}`,
-                      background: isSelected ? `${item.color}35` : `${item.color}15`,
-                      color: item.color,
-                      cursor: "pointer",
-                      fontSize: 11,
-                      fontFamily: "'IBM Plex Mono', monospace",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      boxShadow: isSelected ? `0 0 8px ${item.color}44` : "none",
-                    }}
                   >
                     <span style={{ fontSize: 10 }}>{item.icon}</span>
                     {item.label}
-                  </button>
+                  </Badge>
                 );
               })}
             </div>
