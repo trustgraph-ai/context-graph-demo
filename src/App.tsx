@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { TabKey, DomainKey, Entity } from "./types";
-import { Header, StatusBar } from "./components";
+import { Header, StatusBar, Toaster } from "./components";
 import { GraphView, QueryView, OntologyView } from "./pages";
 
 export default function App() {
@@ -37,6 +37,7 @@ export default function App() {
       {activeTab === "ontology" && <OntologyView />}
 
       <StatusBar />
+      <Toaster />
     </div>
   );
 }
