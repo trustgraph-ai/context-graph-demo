@@ -1,13 +1,9 @@
 import { useConnectionState } from "@trustgraph/react-provider";
-import { useGraphData } from "../../state";
+import { useProgressStateStore } from "@trustgraph/react-state";
 
 export function StatusBar() {
-  const { ontology, isLoading } = useGraphData();
   const connectionState = useConnectionState();
-
-  const domainLabels = ontology
-    ? Object.values(ontology).map(d => d.label).join(" × ")
-    : "Loading...";
+  const activity = useProgressStateStore((state) => state.activity);
 
   const getStatusDisplay = () => {
     if (!connectionState) return { color: "#888", text: "Initializing..." };
@@ -30,6 +26,7 @@ export function StatusBar() {
   };
 
   const status = getStatusDisplay();
+  const activeActivity = activity.size > 0 ? Array.from(activity)[0] : null;
 
   return (
     <div style={{
@@ -39,8 +36,18 @@ export function StatusBar() {
       display: "flex", justifyContent: "space-between", alignItems: "center",
       fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: "#444",
     }}>
-      <div style={{ display: "flex", gap: 20 }}>
-        <span>◈ Ontology: {isLoading ? "Loading..." : domainLabels}</span>
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        {activeActivity ? (
+          <>
+            <span style={{ color: "#FCD34D" }}>◌</span>
+            <span style={{ color: "#666" }}>{activeActivity}...</span>
+          </>
+        ) : (
+          <>
+            <span style={{ color: "#6EE7B7" }}>◈</span>
+            <span style={{ color: "#555" }}>Ready</span>
+          </>
+        )}
       </div>
       <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
         <span style={{ color: status.color }}>●</span> {status.text}
