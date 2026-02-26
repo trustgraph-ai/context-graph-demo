@@ -12,7 +12,7 @@
   "dependencies": {
     "@tanstack/react-query": "^5.90.21",
     "@trustgraph/react-provider": "^1.4.0",
-    "@trustgraph/react-state": "^1.4.1",
+    "@trustgraph/react-state": "^1.4.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
