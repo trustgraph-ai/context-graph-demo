@@ -1,29 +1,39 @@
 import { useState, useEffect, useCallback } from "react";
 import { SectionLabel, FilterButton, Card, LoadingState } from "../components";
-import { useSchemas, useRowEmbeddingsQuery } from "@trustgraph/react-state";
+import { useSchemas, useRowEmbeddingsQuery, useRowsQuery } from "@trustgraph/react-state";
 import { COLLECTION } from "../config";
+
+// Schema field type
+interface SchemaField {
+  name: string;
+  type: string;
+  description?: string;
+}
 
 // Schema type based on what useSchemas returns
 interface SchemaData {
   name: string;
   description?: string;
-  fields?: unknown[];
-  indexes?: unknown[];
+  fields?: SchemaField[];
+  indexes?: { name: string; fields: string[] }[];
 }
 
 interface SchemaInfo {
   key: string;
   name: string;
   description?: string;
+  fields: SchemaField[];
+  indexes: { name: string; fields: string[] }[];
 }
 
-// Type for accumulated results with schema info
+// Type for accumulated results with schema info and row data
 interface AccumulatedMatch {
   schemaKey: string;
   index_name: string;
   index_value: string[];
   text: string;
   score: number;
+  rowData?: Record<string, unknown>;
 }
 
 export function DataView() {
@@ -36,9 +46,12 @@ export function DataView() {
   const { schemas: rawSchemas, schemasLoading, schemasError } = useSchemas();
 
   // Row embeddings query - use async version for accumulating results
-  const { executeQueryAsync } = useRowEmbeddingsQuery();
+  const { executeQueryAsync } = useRowEmbeddingsQuery({ flow: "structured" });
 
-  // Parse schemas into usable format
+  // Rows query for fetching full row data
+  const { executeQueryAsync: executeRowsQueryAsync } = useRowsQuery({ flow: "structured" });
+
+  // Parse schemas into usable format including fields
   // rawSchemas appears to be array of [key, schemaObject] pairs or just schema objects
   const schemas: SchemaInfo[] = (rawSchemas || []).map((s: unknown, idx: number) => {
     // Handle array format [key, value]
@@ -48,6 +61,8 @@ export function DataView() {
         key: String(s[0]),
         name: schemaData?.name || String(s[0]),
         description: schemaData?.description,
+        fields: schemaData?.fields || [],
+        indexes: schemaData?.indexes || [],
       };
     }
     // Handle object format
@@ -56,6 +71,8 @@ export function DataView() {
       key: schemaObj.key || schemaObj.name || `schema-${idx}`,
       name: schemaObj.name || `Schema ${idx}`,
       description: schemaObj.description,
+      fields: schemaObj.fields || [],
+      indexes: schemaObj.indexes || [],
     };
   });
 
@@ -63,6 +80,14 @@ export function DataView() {
   useEffect(() => {
     setAllMatches([]);
   }, [selectedSchema]);
+
+  // Build GraphQL query for a schema
+  const buildGraphQLQuery = useCallback((schema: SchemaInfo) => {
+    // Convert schema key to valid GraphQL name (replace hyphens with underscores)
+    const gqlName = schema.key.replace(/-/g, '_');
+    const fieldNames = schema.fields.map(f => f.name).join('\n    ');
+    return `query { ${gqlName} { ${fieldNames} } }`;
+  }, []);
 
   const handleSearch = useCallback(async () => {
     if (!searchTerm.trim()) return;
@@ -76,7 +101,7 @@ export function DataView() {
 
     try {
       // Search all selected schemas in parallel
-      const results = await Promise.all(
+      const embeddingsResults = await Promise.all(
         schemasToSearch.map(async (schema) => {
           try {
             const matches = await executeQueryAsync({
@@ -91,18 +116,68 @@ export function DataView() {
               schemaKey: schema.key,
             }));
           } catch {
-            // If a schema search fails, return empty array
             return [];
           }
         })
       );
 
-      // Flatten and set all results
-      setAllMatches(results.flat());
+      const flatMatches = embeddingsResults.flat();
+
+      // Now fetch full row data for each schema that has matches
+      const schemaKeysWithMatches = [...new Set(flatMatches.map(m => m.schemaKey))];
+
+      // Fetch all rows for schemas with matches
+      const rowDataBySchema: Record<string, Record<string, unknown>[]> = {};
+
+      await Promise.all(
+        schemaKeysWithMatches.map(async (schemaKey) => {
+          const schema = schemas.find(s => s.key === schemaKey);
+          if (!schema || schema.fields.length === 0) return;
+
+          try {
+            const query = buildGraphQLQuery(schema);
+            const result = await executeRowsQueryAsync({
+              query,
+              collection: COLLECTION,
+            });
+
+            // Result should have data.schemaName array
+            const gqlName = schemaKey.replace(/-/g, '_');
+            const rows = (result?.data as Record<string, unknown[]>)?.[gqlName] || [];
+            rowDataBySchema[schemaKey] = rows as Record<string, unknown>[];
+          } catch (err) {
+            console.error(`Failed to fetch rows for ${schemaKey}:`, err);
+          }
+        })
+      );
+
+      // Match row data to embeddings results using index values
+      const matchesWithRowData = flatMatches.map(match => {
+        const rows = rowDataBySchema[match.schemaKey] || [];
+        // Try to find the matching row by index value
+        // The index_value contains the key values for this match
+        const indexFields = match.index_name.split('.');
+        const indexFieldName = indexFields[indexFields.length - 1]; // Get last part as field name
+
+        const matchedRow = rows.find(row => {
+          const rowValue = row[indexFieldName];
+          // Check if any index value matches
+          return match.index_value.some(iv =>
+            String(rowValue).toLowerCase() === iv.toLowerCase()
+          );
+        });
+
+        return {
+          ...match,
+          rowData: matchedRow,
+        };
+      });
+
+      setAllMatches(matchesWithRowData);
     } finally {
       setIsSearching(false);
     }
-  }, [searchTerm, selectedSchema, schemas, executeQueryAsync]);
+  }, [searchTerm, selectedSchema, schemas, executeQueryAsync, executeRowsQueryAsync, buildGraphQLQuery]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
@@ -247,7 +322,6 @@ export function DataView() {
                         style={{
                           padding: "12px 16px",
                           borderBottom: "1px solid rgba(255,255,255,0.03)",
-                          cursor: "pointer",
                         }}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.background = "rgba(255,255,255,0.02)";
@@ -256,37 +330,57 @@ export function DataView() {
                           e.currentTarget.style.background = "transparent";
                         }}
                       >
-                        {/* Match Text */}
-                        <div style={{
-                          fontSize: 13,
-                          color: "#ddd",
-                          marginBottom: 6,
-                          lineHeight: 1.5,
-                        }}>
-                          {match.text}
-                        </div>
+                        {/* Row Data or Match Text */}
+                        {match.rowData ? (
+                          <div style={{
+                            display: "grid",
+                            gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+                            gap: "8px 16px",
+                            marginBottom: 8,
+                          }}>
+                            {Object.entries(match.rowData).map(([key, value]) => (
+                              <div key={key}>
+                                <span style={{
+                                  fontSize: 10,
+                                  color: "#666",
+                                  fontFamily: "'IBM Plex Mono', monospace",
+                                  textTransform: "uppercase",
+                                }}>
+                                  {key}
+                                </span>
+                                <div style={{
+                                  fontSize: 13,
+                                  color: "#ddd",
+                                  marginTop: 2,
+                                  wordBreak: "break-word",
+                                }}>
+                                  {String(value ?? "")}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div style={{
+                            fontSize: 13,
+                            color: "#ddd",
+                            marginBottom: 6,
+                            lineHeight: 1.5,
+                          }}>
+                            {match.text}
+                          </div>
+                        )}
 
-                        {/* Index Info & Score */}
+                        {/* Score Badge */}
                         <div style={{
                           display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
+                          justifyContent: "flex-end",
                           fontSize: 11,
-                          color: "#666",
                           fontFamily: "'IBM Plex Mono', monospace",
                         }}>
-                          <span>
-                            {match.index_name}
-                            {match.index_value.length > 0 && (
-                              <span style={{ color: "#888", marginLeft: 8 }}>
-                                [{match.index_value.join(", ")}]
-                              </span>
-                            )}
-                          </span>
                           <span style={{
                             color: match.score > 0.8 ? "#6EE7B7" : match.score > 0.5 ? "#FCD34D" : "#888",
                           }}>
-                            {(match.score * 100).toFixed(1)}%
+                            {(match.score * 100).toFixed(1)}% match
                           </span>
                         </div>
                       </div>
