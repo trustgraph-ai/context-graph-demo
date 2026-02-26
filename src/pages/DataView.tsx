@@ -122,14 +122,17 @@ export function DataView() {
   }, [searchTerm]);
 
   // When embeddings are ready, perform the search (only once per search term)
+  const searchInProgressRef = useRef(false);
+
   useEffect(() => {
     // Guard: need active search term, embeddings ready, not already searched this term
     if (!activeSearchTerm || !embeddings || embeddings.length === 0 || embeddingsLoading) {
       return;
     }
-    if (lastSearchedRef.current === activeSearchTerm) {
-      return; // Already searched this term
+    if (lastSearchedRef.current === activeSearchTerm || searchInProgressRef.current) {
+      return; // Already searched this term or search in progress
     }
+    searchInProgressRef.current = true;
     lastSearchedRef.current = activeSearchTerm;
 
     const performSearch = async () => {
@@ -163,8 +166,17 @@ export function DataView() {
 
         const flatMatches = embeddingsResults.flat();
 
+        // Deduplicate matches by schemaKey + index_value combination
+        const seen = new Set<string>();
+        const uniqueMatches = flatMatches.filter(match => {
+          const key = `${match.schemaKey}:${match.index_value.join(',')}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+
         // Now fetch full row data for each schema that has matches
-        const schemaKeysWithMatches = [...new Set(flatMatches.map(m => m.schemaKey))];
+        const schemaKeysWithMatches = [...new Set(uniqueMatches.map(m => m.schemaKey))];
 
         // Fetch all rows for schemas with matches
         const rowDataBySchema: Record<string, Record<string, unknown>[]> = {};
@@ -192,7 +204,7 @@ export function DataView() {
         );
 
         // Match row data to embeddings results using index values
-        const matchesWithRowData = flatMatches.map(match => {
+        const matchesWithRowData = uniqueMatches.map(match => {
           const rows = rowDataBySchema[match.schemaKey] || [];
           // Try to find the matching row by index value
           // The index_value contains the key values for this match
@@ -216,6 +228,7 @@ export function DataView() {
         setAllMatches(matchesWithRowData);
       } finally {
         setIsSearching(false);
+        searchInProgressRef.current = false;
       }
     };
 
