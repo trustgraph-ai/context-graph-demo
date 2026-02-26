@@ -1,5 +1,5 @@
 import type { DomainKey, Entity, OntologyDomain } from "../types";
-import { GraphCanvas, NodeDetailPanel } from "../components";
+import { GraphCanvas, NodeDetailPanel, FilterButton } from "../components";
 import { useGraphData } from "../state";
 
 interface GraphViewProps {
@@ -57,27 +57,23 @@ export function GraphView({ activeFilter, onFilterChange, selectedNode, onNodeSe
         <span style={{ fontSize: 11, color: "#555", fontFamily: "'IBM Plex Mono', monospace", marginRight: 8 }}>FILTER:</span>
         {selectedNode ? (
           <>
-            <button onClick={() => onFilterChange(null)}
-              style={{
-                padding: "5px 12px", borderRadius: 20, border: `1px solid ${!activeFilter ? '#fff' : 'rgba(255,255,255,0.1)'}`,
-                background: !activeFilter ? "rgba(255,255,255,0.08)" : "transparent",
-                color: !activeFilter ? "#fff" : "#777", fontSize: 11, cursor: "pointer",
-                fontFamily: "'IBM Plex Mono', monospace",
-              }}>All</button>
+            <FilterButton
+              label="All"
+              isActive={!activeFilter}
+              onClick={() => onFilterChange(null)}
+            />
             {(Object.entries(ontology) as [DomainKey, OntologyDomain][])
               .filter(([key]) => relevantDomains?.has(key))
               .slice(0, 10)
               .map(([key, data]) => (
-                <button key={key} onClick={() => onFilterChange(activeFilter === key ? null : key)}
-                  style={{
-                    padding: "5px 12px", borderRadius: 20,
-                    border: `1px solid ${activeFilter === key ? data.color + '88' : 'rgba(255,255,255,0.1)'}`,
-                    background: activeFilter === key ? data.color + "15" : "transparent",
-                    color: activeFilter === key ? data.color : "#777",
-                    fontSize: 11, cursor: "pointer", fontFamily: "'IBM Plex Mono', monospace",
-                  }}>
-                  {data.icon} {data.label}
-                </button>
+                <FilterButton
+                  key={key}
+                  label={data.label}
+                  icon={data.icon}
+                  color={data.color}
+                  isActive={activeFilter === key}
+                  onClick={() => onFilterChange(activeFilter === key ? null : key)}
+                />
               ))}
           </>
         ) : (

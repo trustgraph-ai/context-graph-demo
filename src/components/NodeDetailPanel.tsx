@@ -1,4 +1,5 @@
 import type { Entity, Relationship, OntologyType } from "../types";
+import { SectionLabel } from "./SectionLabel";
 
 interface NodeDetailPanelProps {
   node: Entity;
@@ -31,7 +32,7 @@ export function NodeDetailPanel({ node, relationships, entities, ontology, prope
         {node.icon} {node.label}
       </div>
       <div style={{ marginTop: 20 }}>
-        <div style={{ fontSize: 10, color: "#555", fontFamily: "'IBM Plex Mono', monospace", marginBottom: 10, letterSpacing: "0.1em" }}>PROPERTIES</div>
+        <SectionLabel>PROPERTIES</SectionLabel>
         {Object.entries(node.props || {}).map(([k, v]) => (
           <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
             <span style={{ fontSize: 12, color: "#888" }}>{propertyLabels[k] || k}</span>
@@ -40,7 +41,7 @@ export function NodeDetailPanel({ node, relationships, entities, ontology, prope
         ))}
       </div>
       <div style={{ marginTop: 24 }}>
-        <div style={{ fontSize: 10, color: "#555", fontFamily: "'IBM Plex Mono', monospace", marginBottom: 10, letterSpacing: "0.1em" }}>RELATIONSHIPS</div>
+        <SectionLabel>RELATIONSHIPS</SectionLabel>
         {nodeRelationships.map((r, i) => {
           const otherId = r.from === node.id ? r.to : r.from;
           const other = entities.find(e => e.id === otherId);

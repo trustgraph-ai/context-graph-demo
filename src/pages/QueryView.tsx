@@ -1,16 +1,9 @@
 import { useState, useEffect, useRef } from "react";
-import { GraphCanvas, NodeDetailPanel } from "../components";
+import { GraphCanvas, NodeDetailPanel, SectionLabel } from "../components";
 import { useGraphData } from "../state";
 import { COLLECTION } from "../config";
 import type { Entity } from "../types";
 import { useChat, useConversation, useEmbeddings, useGraphEmbeddings } from "@trustgraph/react-state";
-
-// Pre-canned queries
-const QUICK_QUERIES = [
-  "Which consumers have the highest loyalty scores and what brands do they prefer?",
-  "What retail channels are most effective for reaching eco-conscious consumers?",
-  "How do recommendation agents connect brands with consumer segments?",
-];
 
 // Helper to extract local name from URI
 function uriToId(uri: string): string {
@@ -150,9 +143,7 @@ export function QueryView() {
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         {/* Query input area */}
         <div style={{ padding: "20px 28px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-          <div style={{ fontSize: 10, color: "#555", fontFamily: "'IBM Plex Mono', monospace", marginBottom: 12, letterSpacing: "0.1em" }}>
-            AGENT QUERIES
-          </div>
+          <SectionLabel marginBottom={12}>AGENT QUERIES</SectionLabel>
 
           <div style={{ display: "flex", gap: 8 }}>
             <input
@@ -197,9 +188,9 @@ export function QueryView() {
         {/* Related entities from graph embeddings */}
         {queryForEmbeddings && (
           <div style={{ padding: "16px 28px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-            <div style={{ fontSize: 10, color: "#555", fontFamily: "'IBM Plex Mono', monospace", marginBottom: 10, letterSpacing: "0.1em" }}>
+            <SectionLabel>
               RELATED ENTITIES {(embeddingsLoading || graphEmbeddingsLoading) && <span style={{ color: "#FCD34D" }}>loading...</span>}
-            </div>
+            </SectionLabel>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {embeddingResults.length === 0 && !embeddingsLoading && !graphEmbeddingsLoading && (
                 <span style={{ fontSize: 11, color: "#555", fontStyle: "italic" }}>No related concepts found</span>

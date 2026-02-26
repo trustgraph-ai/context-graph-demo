@@ -1,4 +1,5 @@
 import type { DomainKey, OntologyDomain } from "../types";
+import { SectionLabel } from "../components";
 import { useGraphData, useOntologySchema } from "../state";
 
 // Helper to get local name from URI
@@ -29,9 +30,7 @@ export function OntologyView() {
   return (
     <div style={{ flex: 1, padding: "28px", overflowY: "auto", height: "calc(100vh - 110px)" }}>
       <div style={{ maxWidth: 900, margin: "0 auto" }}>
-        <div style={{ fontSize: 10, color: "#555", fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.1em", marginBottom: 24 }}>
-          ONTOLOGY SCHEMA
-        </div>
+        <SectionLabel marginBottom={24}>ONTOLOGY SCHEMA</SectionLabel>
 
         {/* Ontology class cards */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 32 }}>
@@ -55,9 +54,7 @@ export function OntologyView() {
                   </div>
                 </div>
                 <div style={{ fontSize: 12, color: "#888", lineHeight: 1.5, marginBottom: 14 }}>{data.description}</div>
-                <div style={{ fontSize: 10, color: "#555", fontFamily: "'IBM Plex Mono', monospace", marginBottom: 8, letterSpacing: "0.05em" }}>
-                  PROPERTIES ({domainProps.length})
-                </div>
+                <SectionLabel marginBottom={8}>PROPERTIES ({domainProps.length})</SectionLabel>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                   {domainProps.map((p) => (
                     <span key={p} style={{
@@ -68,9 +65,7 @@ export function OntologyView() {
                     }}>{p}</span>
                   ))}
                 </div>
-                <div style={{ fontSize: 10, color: "#555", fontFamily: "'IBM Plex Mono', monospace", marginTop: 14, marginBottom: 8, letterSpacing: "0.05em" }}>
-                  INSTANCES ({data.subclasses.length})
-                </div>
+                <SectionLabel marginTop={14} marginBottom={8}>INSTANCES ({data.subclasses.length})</SectionLabel>
                 {data.subclasses.map((sc) => (
                   <div key={sc.id} style={{
                     padding: "6px 10px", marginBottom: 3, borderRadius: 4,
@@ -92,9 +87,7 @@ export function OntologyView() {
           background: "rgba(255,255,255,0.02)",
           border: "1px solid rgba(255,255,255,0.06)",
         }}>
-          <div style={{ fontSize: 10, color: "#555", fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.1em", marginBottom: 16 }}>
-            RELATIONSHIP PREDICATES ({schema.objectProperties.length})
-          </div>
+          <SectionLabel marginBottom={16}>RELATIONSHIP PREDICATES ({schema.objectProperties.length})</SectionLabel>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
             {schema.objectProperties.map((prop) => {
               const fromDomain = prop.domain ? getLocalName(prop.domain).toLowerCase() as DomainKey : null;
