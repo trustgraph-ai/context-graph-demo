@@ -1,5 +1,5 @@
 import type { DomainKey, OntologyDomain } from "../types";
-import { SectionLabel, Card, Badge } from "../components";
+import { SectionLabel, Card, Badge, LoadingState } from "../components";
 import { useGraphData, useOntologySchema } from "../state";
 
 // Helper to get local name from URI
@@ -17,11 +17,7 @@ export function OntologyView() {
   const isLoading = graphLoading || schemaLoading;
 
   if (isLoading || !ontology || !schema) {
-    return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#666" }}>
-        Loading ontology...
-      </div>
-    );
+    return <LoadingState message="Loading ontology..." />;
   }
 
   // Count total instances

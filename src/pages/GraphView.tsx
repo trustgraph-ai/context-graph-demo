@@ -1,5 +1,5 @@
 import type { DomainKey, Entity, OntologyDomain } from "../types";
-import { GraphCanvas, NodeDetailPanel, FilterButton } from "../components";
+import { GraphCanvas, NodeDetailPanel, FilterButton, LoadingState } from "../components";
 import { useGraphData } from "../state";
 
 interface GraphViewProps {
@@ -32,19 +32,11 @@ export function GraphView({ activeFilter, onFilterChange, selectedNode, onNodeSe
     : null;
 
   if (isLoading) {
-    return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#666" }}>
-        Loading graph data...
-      </div>
-    );
+    return <LoadingState message="Loading graph data..." />;
   }
 
   if (isError || !ontology) {
-    return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#f66" }}>
-        Error loading graph data
-      </div>
-    );
+    return <LoadingState variant="error" message="Error loading graph data" />;
   }
 
   return (

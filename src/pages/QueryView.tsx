@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { GraphCanvas, NodeDetailPanel, SectionLabel, Badge } from "../components";
+import { GraphCanvas, NodeDetailPanel, SectionLabel, Badge, LoadingState } from "../components";
 import { useGraphData } from "../state";
 import { COLLECTION } from "../config";
 import type { Entity } from "../types";
@@ -131,11 +131,7 @@ export function QueryView() {
   })();
 
   if (graphLoading || !ontology) {
-    return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#666" }}>
-        Loading...
-      </div>
-    );
+    return <LoadingState />;
   }
 
   return (
