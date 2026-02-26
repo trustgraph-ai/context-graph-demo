@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { SectionLabel, FilterButton, Card, LoadingState } from "../components";
 import { useSchemas, useRowEmbeddingsQuery } from "@trustgraph/react-state";
 import { COLLECTION } from "../config";
@@ -17,15 +17,26 @@ interface SchemaInfo {
   description?: string;
 }
 
+// Type for accumulated results with schema info
+interface AccumulatedMatch {
+  schemaKey: string;
+  index_name: string;
+  index_value: string[];
+  text: string;
+  score: number;
+}
+
 export function DataView() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSchema, setSelectedSchema] = useState<string | null>(null);
+  const [allMatches, setAllMatches] = useState<AccumulatedMatch[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
   // Fetch schemas
   const { schemas: rawSchemas, schemasLoading, schemasError } = useSchemas();
 
-  // Row embeddings query
-  const { executeQuery, isExecuting, matches, reset } = useRowEmbeddingsQuery();
+  // Row embeddings query - use async version for accumulating results
+  const { executeQueryAsync } = useRowEmbeddingsQuery();
 
   // Parse schemas into usable format
   // rawSchemas appears to be array of [key, schemaObject] pairs or just schema objects
@@ -50,33 +61,48 @@ export function DataView() {
 
   // Clear results when schema filter changes
   useEffect(() => {
-    reset();
-  }, [selectedSchema, reset]);
+    setAllMatches([]);
+  }, [selectedSchema]);
 
-  const handleSearch = () => {
+  const handleSearch = useCallback(async () => {
     if (!searchTerm.trim()) return;
 
-    // If a schema is selected, search only that schema
-    // Otherwise search all schemas
-    if (selectedSchema) {
-      executeQuery({
-        query: searchTerm.trim(),
-        schemaName: selectedSchema,
-        collection: COLLECTION,
-        limit: 20,
-      });
-    } else {
-      // Search all schemas - execute query for each
-      schemas.forEach((schema) => {
-        executeQuery({
-          query: searchTerm.trim(),
-          schemaName: schema.key,
-          collection: COLLECTION,
-          limit: 10,
-        });
-      });
+    setIsSearching(true);
+    setAllMatches([]);
+
+    const schemasToSearch = selectedSchema
+      ? schemas.filter(s => s.key === selectedSchema)
+      : schemas;
+
+    try {
+      // Search all selected schemas in parallel
+      const results = await Promise.all(
+        schemasToSearch.map(async (schema) => {
+          try {
+            const matches = await executeQueryAsync({
+              query: searchTerm.trim(),
+              schemaName: schema.key,
+              collection: COLLECTION,
+              limit: selectedSchema ? 20 : 10,
+            });
+            // Tag each match with its schema
+            return matches.map(m => ({
+              ...m,
+              schemaKey: schema.key,
+            }));
+          } catch {
+            // If a schema search fails, return empty array
+            return [];
+          }
+        })
+      );
+
+      // Flatten and set all results
+      setAllMatches(results.flat());
+    } finally {
+      setIsSearching(false);
     }
-  };
+  }, [searchTerm, selectedSchema, schemas, executeQueryAsync]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
@@ -84,20 +110,14 @@ export function DataView() {
     }
   };
 
-  // Group matches by schema (index_name contains schema info)
-  const matchesBySchema = matches.reduce((acc, match) => {
-    const schemaKey = match.index_name.split('.')[0] || 'unknown';
-    if (!acc[schemaKey]) {
-      acc[schemaKey] = [];
+  // Group matches by schema
+  const matchesBySchema = allMatches.reduce((acc, match) => {
+    if (!acc[match.schemaKey]) {
+      acc[match.schemaKey] = [];
     }
-    acc[schemaKey].push(match);
+    acc[match.schemaKey].push(match);
     return acc;
-  }, {} as Record<string, typeof matches>);
-
-  // Filter by selected schema if any
-  const filteredMatchesBySchema = selectedSchema
-    ? { [selectedSchema]: matchesBySchema[selectedSchema] || [] }
-    : matchesBySchema;
+  }, {} as Record<string, AccumulatedMatch[]>);
 
   if (schemasLoading) {
     return <LoadingState message="Loading schemas..." />;
@@ -158,37 +178,37 @@ export function DataView() {
           />
           <button
             onClick={handleSearch}
-            disabled={isExecuting || !searchTerm.trim()}
+            disabled={isSearching || !searchTerm.trim()}
             style={{
               padding: "12px 20px",
               borderRadius: 8,
               border: "1px solid #93C5FD44",
-              background: isExecuting || !searchTerm.trim() ? "rgba(255,255,255,0.02)" : "rgba(147,197,253,0.1)",
-              color: isExecuting || !searchTerm.trim() ? "#555" : "#93C5FD",
-              cursor: isExecuting || !searchTerm.trim() ? "not-allowed" : "pointer",
+              background: isSearching || !searchTerm.trim() ? "rgba(255,255,255,0.02)" : "rgba(147,197,253,0.1)",
+              color: isSearching || !searchTerm.trim() ? "#555" : "#93C5FD",
+              cursor: isSearching || !searchTerm.trim() ? "not-allowed" : "pointer",
               fontSize: 13,
               fontWeight: 600,
               fontFamily: "'IBM Plex Mono', monospace",
             }}
           >
-            {isExecuting ? "..." : "Search"}
+            {isSearching ? "..." : "Search"}
           </button>
         </div>
       </div>
 
       {/* Results Area */}
       <div style={{ flex: 1, padding: "24px 28px", overflowY: "auto" }}>
-        {matches.length === 0 && !isExecuting ? (
+        {allMatches.length === 0 && !isSearching ? (
           <div style={{ color: "#444", fontSize: 13, fontStyle: "italic" }}>
             Enter a search term to find data across tables.
           </div>
-        ) : isExecuting ? (
+        ) : isSearching ? (
           <div style={{ color: "#93C5FD", fontSize: 13 }}>
             Searching...
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-            {Object.entries(filteredMatchesBySchema).map(([schemaKey, schemaMatches]) => {
+            {Object.entries(matchesBySchema).map(([schemaKey, schemaMatches]) => {
               if (!schemaMatches || schemaMatches.length === 0) return null;
               const schema = schemas.find(s => s.key === schemaKey);
 
