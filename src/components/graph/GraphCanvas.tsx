@@ -23,8 +23,34 @@ export function GraphCanvas({ entities, relationships, ontology, highlightedEnti
   const hoveredRef = useRef<string | null>(null);
   const settledRef = useRef<boolean>(false);
   const startTimeRef = useRef<number>(0);
+  const timeRef = useRef<number>(0);
+  const lastFrameTimeRef = useRef<number>(0);
+
+  // Store view state in refs to avoid triggering resets
+  const highlightedRef = useRef<string[]>(highlightedEntities);
+  const activeFilterRef = useRef<DomainKey | null>(activeFilter);
+  const relationshipsRef = useRef<Relationship[]>(relationships);
+  const ontologyRef = useRef<OntologyType>(ontology);
+
   const [hovered, setHovered] = useState<string | null>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+
+  // Keep refs in sync with props
+  useEffect(() => {
+    highlightedRef.current = highlightedEntities;
+  }, [highlightedEntities]);
+
+  useEffect(() => {
+    activeFilterRef.current = activeFilter;
+  }, [activeFilter]);
+
+  useEffect(() => {
+    relationshipsRef.current = relationships;
+  }, [relationships]);
+
+  useEffect(() => {
+    ontologyRef.current = ontology;
+  }, [ontology]);
 
   // Track container size changes
   useEffect(() => {
@@ -60,27 +86,31 @@ export function GraphCanvas({ entities, relationships, ontology, highlightedEnti
     }
 
     // Domain labels
+    const currentOntology = ontologyRef.current;
     (Object.entries(domainPositions) as [DomainKey, { x: number; y: number }][]).forEach(([domain, pos]) => {
-      const data = ontology[domain];
+      const data = currentOntology[domain];
       ctx.font = "bold 22px 'IBM Plex Mono', monospace";
       ctx.fillStyle = data.color + "44";
       ctx.textAlign = "center";
       ctx.fillText(data.label.toUpperCase(), pos.x, pos.y - Math.min(canvas.width, canvas.height) * 0.14);
     });
-  }, [ontology]);
+  }, []);
 
-  // Draw nodes layer
+  // Draw nodes layer - reads from refs
   const drawNodesLayer = useCallback((ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, time: number) => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const nodes = nodesRef.current;
     const settled = settledRef.current;
+    const highlighted = highlightedRef.current;
+    const filter = activeFilterRef.current;
+    const rels = relationshipsRef.current;
 
     nodes.forEach((node) => {
-      const isHighlighted = highlightedEntities && highlightedEntities.includes(node.id);
+      const isHighlighted = highlighted && highlighted.includes(node.id);
       const isHovered = hoveredRef.current === node.id;
-      const isDimmed = highlightedEntities && highlightedEntities.length > 0 && !isHighlighted;
-      const isFiltered = activeFilter && node.domain !== activeFilter && !relationships.some(
-        r => r.domain.includes(activeFilter) && (r.from === node.id || r.to === node.id)
+      const isDimmed = highlighted && highlighted.length > 0 && !isHighlighted;
+      const isFiltered = filter && node.domain !== filter && !rels.some(
+        r => r.domain.includes(filter) && (r.from === node.id || r.to === node.id)
       );
 
       const alpha = isFiltered ? 0.15 : isDimmed ? 0.3 : 1;
@@ -121,16 +151,19 @@ export function GraphCanvas({ entities, relationships, ontology, highlightedEnti
         node.y += Math.cos(time + node.targetY * 0.01) * 0.3;
       }
     });
-  }, [highlightedEntities, activeFilter, relationships]);
+  }, []);
 
-  // Draw edges layer
+  // Draw edges layer - reads from refs
   const drawEdgesLayer = useCallback((ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, time: number) => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const nodes = nodesRef.current;
+    const highlighted = highlightedRef.current;
+    const filter = activeFilterRef.current;
+    const rels = relationshipsRef.current;
 
-    const filteredRels = activeFilter
-      ? relationships.filter((r) => r.domain.includes(activeFilter))
-      : relationships;
+    const filteredRels = filter
+      ? rels.filter((r) => r.domain.includes(filter))
+      : rels;
 
     filteredRels.forEach((rel) => {
       const fromNode = nodes.find((n) => n.id === rel.from);
@@ -138,9 +171,9 @@ export function GraphCanvas({ entities, relationships, ontology, highlightedEnti
       if (!fromNode || !toNode) return;
 
       const isHighlighted =
-        highlightedEntities &&
-        highlightedEntities.includes(rel.from) &&
-        highlightedEntities.includes(rel.to);
+        highlighted &&
+        highlighted.includes(rel.from) &&
+        highlighted.includes(rel.to);
 
       const baseAlpha = isHighlighted ? 0.7 : 0.12;
       const pulse = isHighlighted ? Math.sin(time * 4) * 0.15 + 0.15 : 0;
@@ -170,14 +203,68 @@ export function GraphCanvas({ entities, relationships, ontology, highlightedEnti
         ctx.fill();
       }
     });
-  }, [relationships, highlightedEntities, activeFilter]);
+  }, []);
 
-  // Main setup and animation loop
+  // Animation loop function - separate from setup
+  const runAnimation = useCallback(() => {
+    const nodesCanvas = nodesCanvasRef.current;
+    const edgesCanvas = edgesCanvasRef.current;
+    const nodesCtx = nodesCanvas?.getContext("2d");
+    const edgesCtx = edgesCanvas?.getContext("2d");
+
+    if (!nodesCtx || !nodesCanvas || !edgesCtx || !edgesCanvas) return;
+
+    function animate(currentTime: number) {
+      // Throttle to target fps
+      if (currentTime - lastFrameTimeRef.current < FRAME_INTERVAL) {
+        animRef.current = requestAnimationFrame(animate);
+        return;
+      }
+      lastFrameTimeRef.current = currentTime;
+      timeRef.current += 0.01;
+
+      // Check if we should settle
+      if (!settledRef.current && currentTime - startTimeRef.current > SETTLE_TIME) {
+        settledRef.current = true;
+      }
+
+      const hasHighlights = highlightedRef.current && highlightedRef.current.length > 0;
+      const isSettled = settledRef.current;
+
+      // Draw edges layer
+      drawEdgesLayer(edgesCtx, edgesCanvas, timeRef.current);
+
+      // Draw nodes layer
+      if (!isSettled || hasHighlights || hoveredRef.current) {
+        drawNodesLayer(nodesCtx, nodesCanvas, timeRef.current);
+      }
+
+      // Continue animation if not settled, or if there are highlights
+      if (!isSettled || hasHighlights) {
+        animRef.current = requestAnimationFrame(animate);
+      } else {
+        // Settled with no highlights - do one final draw and stop
+        drawNodesLayer(nodesCtx, nodesCanvas, timeRef.current);
+        drawEdgesLayer(edgesCtx, edgesCanvas, timeRef.current);
+        animRef.current = 0;
+      }
+    }
+
+    animRef.current = requestAnimationFrame(animate);
+  }, [drawNodesLayer, drawEdgesLayer]);
+
+  // Main setup - only runs when data or size changes
   useEffect(() => {
     const staticCanvas = staticCanvasRef.current;
     const nodesCanvas = nodesCanvasRef.current;
     const edgesCanvas = edgesCanvasRef.current;
     if (!staticCanvas || !nodesCanvas || !edgesCanvas || containerSize.width === 0) return;
+
+    // Cancel any existing animation
+    if (animRef.current) {
+      cancelAnimationFrame(animRef.current);
+      animRef.current = 0;
+    }
 
     // Setup all canvases
     [staticCanvas, nodesCanvas, edgesCanvas].forEach(canvas => {
@@ -221,9 +308,7 @@ export function GraphCanvas({ entities, relationships, ontology, highlightedEnti
     });
 
     const staticCtx = staticCanvas.getContext("2d");
-    const nodesCtx = nodesCanvas.getContext("2d");
-    const edgesCtx = edgesCanvas.getContext("2d");
-    if (!staticCtx || !nodesCtx || !edgesCtx) return;
+    if (!staticCtx) return;
 
     // Draw static layer once
     drawStaticLayer(staticCtx, staticCanvas, domainPositions);
@@ -231,91 +316,42 @@ export function GraphCanvas({ entities, relationships, ontology, highlightedEnti
     // Reset animation state
     settledRef.current = false;
     startTimeRef.current = performance.now();
-    let time = 0;
-    let lastFrameTime = 0;
+    timeRef.current = 0;
+    lastFrameTimeRef.current = 0;
 
-    function animate(currentTime: number) {
-      // Throttle to target fps
-      if (currentTime - lastFrameTime < FRAME_INTERVAL) {
-        animRef.current = requestAnimationFrame(animate);
-        return;
+    // Start animation
+    runAnimation();
+
+    return () => {
+      if (animRef.current) {
+        cancelAnimationFrame(animRef.current);
+        animRef.current = 0;
       }
-      lastFrameTime = currentTime;
-      time += 0.01;
+    };
+  }, [entities, ontology, containerSize, drawStaticLayer, runAnimation]);
 
-      // Check if we should settle
-      if (!settledRef.current && currentTime - startTimeRef.current > SETTLE_TIME) {
-        settledRef.current = true;
-      }
+  // Restart animation when highlights change (without resetting positions)
+  useEffect(() => {
+    const hasHighlights = highlightedEntities && highlightedEntities.length > 0;
 
-      const hasHighlights = highlightedEntities && highlightedEntities.length > 0;
-      const isSettled = settledRef.current;
-
-      // Draw edges layer (always needed for highlight animations)
-      if (edgesCtx && edgesCanvas) {
-        drawEdgesLayer(edgesCtx, edgesCanvas, time);
-      }
-
-      // Draw nodes layer (only if not settled, or if there are highlights/hover)
-      if (nodesCtx && nodesCanvas) {
-        if (!isSettled || hasHighlights || hoveredRef.current) {
-          drawNodesLayer(nodesCtx, nodesCanvas, time);
-        }
-      }
-
-      // Continue animation if not settled, or if there are highlights
-      if (!isSettled || hasHighlights) {
-        animRef.current = requestAnimationFrame(animate);
-      } else {
-        // Settled with no highlights - do one final draw and stop
-        if (nodesCtx && nodesCanvas) {
-          drawNodesLayer(nodesCtx, nodesCanvas, time);
-        }
-        if (edgesCtx && edgesCanvas) {
-          drawEdgesLayer(edgesCtx, edgesCanvas, time);
-        }
-      }
+    // If we have highlights and animation isn't running, restart it
+    if (hasHighlights && animRef.current === 0) {
+      runAnimation();
     }
+  }, [highlightedEntities, runAnimation]);
 
-    animRef.current = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(animRef.current);
-  }, [entities, relationships, ontology, highlightedEntities, activeFilter, containerSize, drawStaticLayer, drawNodesLayer, drawEdgesLayer]);
+  // Redraw on filter change (without resetting)
+  useEffect(() => {
+    const nodesCanvas = nodesCanvasRef.current;
+    const edgesCanvas = edgesCanvasRef.current;
+    const nodesCtx = nodesCanvas?.getContext("2d");
+    const edgesCtx = edgesCanvas?.getContext("2d");
 
-  // Restart animation on hover (if settled)
-  const restartAnimationIfNeeded = useCallback(() => {
-    if (settledRef.current && animRef.current === 0) {
-      const nodesCanvas = nodesCanvasRef.current;
-      const edgesCanvas = edgesCanvasRef.current;
-      const nodesCtx = nodesCanvas?.getContext("2d");
-      const edgesCtx = edgesCanvas?.getContext("2d");
-
-      if (nodesCtx && nodesCanvas && edgesCtx && edgesCanvas) {
-        let time = 0;
-        let lastFrameTime = 0;
-
-        function animateHover(currentTime: number) {
-          if (currentTime - lastFrameTime < FRAME_INTERVAL) {
-            animRef.current = requestAnimationFrame(animateHover);
-            return;
-          }
-          lastFrameTime = currentTime;
-          time += 0.01;
-
-          drawNodesLayer(nodesCtx!, nodesCanvas!, time);
-          drawEdgesLayer(edgesCtx!, edgesCanvas!, time);
-
-          const hasHighlights = highlightedEntities && highlightedEntities.length > 0;
-          if (hasHighlights || hoveredRef.current) {
-            animRef.current = requestAnimationFrame(animateHover);
-          } else {
-            animRef.current = 0;
-          }
-        }
-
-        animRef.current = requestAnimationFrame(animateHover);
-      }
+    if (nodesCtx && nodesCanvas && edgesCtx && edgesCanvas && settledRef.current && animRef.current === 0) {
+      drawNodesLayer(nodesCtx, nodesCanvas, timeRef.current);
+      drawEdgesLayer(edgesCtx, edgesCanvas, timeRef.current);
     }
-  }, [highlightedEntities, drawNodesLayer, drawEdgesLayer]);
+  }, [activeFilter, drawNodesLayer, drawEdgesLayer]);
 
   const handleMouseMove = useCallback((e: MouseEvent<HTMLCanvasElement>) => {
     const canvas = nodesCanvasRef.current;
@@ -338,11 +374,19 @@ export function GraphCanvas({ entities, relationships, ontology, highlightedEnti
     setHovered(found);
     canvas.style.cursor = found ? "pointer" : "default";
 
-    // Restart animation if hover state changed and we're settled
-    if (wasHovered !== found) {
-      restartAnimationIfNeeded();
+    // Redraw if hover state changed and we're settled
+    if (wasHovered !== found && settledRef.current) {
+      const nodesCanvas = nodesCanvasRef.current;
+      const edgesCanvas = edgesCanvasRef.current;
+      const nodesCtx = nodesCanvas?.getContext("2d");
+      const edgesCtx = edgesCanvas?.getContext("2d");
+
+      if (nodesCtx && nodesCanvas && edgesCtx && edgesCanvas) {
+        drawNodesLayer(nodesCtx, nodesCanvas, timeRef.current);
+        drawEdgesLayer(edgesCtx, edgesCanvas, timeRef.current);
+      }
     }
-  }, [restartAnimationIfNeeded]);
+  }, [drawNodesLayer, drawEdgesLayer]);
 
   const handleClick = useCallback(() => {
     if (hoveredRef.current && onNodeClick) {
