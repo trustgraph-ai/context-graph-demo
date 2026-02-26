@@ -83,10 +83,20 @@ export function GraphCanvas({ entities, relationships, ontology, highlightedEnti
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     let time = 0;
+    let lastFrameTime = 0;
+    const frameInterval = 1000 / 15; // 15fps
 
-    function draw() {
+    function draw(currentTime: number = 0) {
       if (!ctx || !canvas) return;
-      time += 0.005;
+
+      // Throttle to target fps
+      if (currentTime - lastFrameTime < frameInterval) {
+        animRef.current = requestAnimationFrame(draw);
+        return;
+      }
+      lastFrameTime = currentTime;
+
+      time += 0.015; // Adjusted for lower frame rate
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       // Subtle grid

@@ -253,20 +253,6 @@ export function QueryView() {
           activeFilter={null}
         />
       </div>
-      {selectedNode && (
-        <NodeDetailPanel
-          node={selectedNode}
-          relationships={relationships}
-          entities={entities}
-          ontology={ontology}
-          propertyLabels={propertyLabels}
-          onClose={() => setSelectedNode(null)}
-          onNodeSelect={(node) => {
-            setSelectedNode(node);
-            setSelectedEntityId(null);
-          }}
-        />
-      )}
     </div>
   );
 }
