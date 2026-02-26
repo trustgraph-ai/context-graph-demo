@@ -29,21 +29,29 @@ export function Header({ activeTab, onTabChange }: HeaderProps) {
         </div>
       </div>
       <div style={{ display: "flex", gap: 6, fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }}>
-        {(["graph", "query", "ontology"] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => onTabChange(tab)}
-            style={{
-              padding: "7px 16px", borderRadius: 6, border: "none", cursor: "pointer",
-              background: activeTab === tab ? "rgba(255,255,255,0.1)" : "transparent",
-              color: activeTab === tab ? "#fff" : "#666",
-              fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, fontWeight: activeTab === tab ? 600 : 400,
-              transition: "all 0.2s",
-            }}
-          >
-            {tab === "graph" ? "◈ Context Graph" : tab === "query" ? "⚡ Agent Query" : "◇ Ontology"}
-          </button>
-        ))}
+        {(["graph", "query", "data", "ontology"] as const).map((tab) => {
+          const labels: Record<typeof tab, string> = {
+            graph: "◈ Context Graph",
+            query: "⚡ Agent Query",
+            data: "▤ Data",
+            ontology: "◇ Ontology",
+          };
+          return (
+            <button
+              key={tab}
+              onClick={() => onTabChange(tab)}
+              style={{
+                padding: "7px 16px", borderRadius: 6, border: "none", cursor: "pointer",
+                background: activeTab === tab ? "rgba(255,255,255,0.1)" : "transparent",
+                color: activeTab === tab ? "#fff" : "#666",
+                fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, fontWeight: activeTab === tab ? 600 : 400,
+                transition: "all 0.2s",
+              }}
+            >
+              {labels[tab]}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

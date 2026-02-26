@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import type { TabKey, DomainKey, Entity } from "./types";
 import { Header, StatusBar, Toaster } from "./components";
-import { GraphView, QueryView, OntologyView } from "./pages";
+import { GraphView, QueryView, DataView, OntologyView } from "./pages";
 import { useGraphData, toast } from "./state";
 
 export default function App() {
@@ -42,6 +42,8 @@ export default function App() {
       )}
 
       {activeTab === "query" && <QueryView />}
+
+      {activeTab === "data" && <DataView />}
 
       {activeTab === "ontology" && <OntologyView />}
 
