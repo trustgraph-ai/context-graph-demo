@@ -10,13 +10,10 @@ export default function App() {
   const [selectedNode, setSelectedNode] = useState<Entity | null>(null);
   const { entities, isLoading } = useGraphData();
 
-  // Test notifications when graph loads
+  // Notification when graph loads
   useEffect(() => {
     if (!isLoading && entities.length > 0) {
       toast.success(`Graph loaded: ${entities.length} entities`);
-      setTimeout(() => toast.info("This is an info notification"), 500);
-      setTimeout(() => toast.warning("This is a warning notification"), 1000);
-      setTimeout(() => toast.error("This is an error notification"), 1500);
     }
   }, [isLoading, entities.length]);
 
