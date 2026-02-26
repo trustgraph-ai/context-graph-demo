@@ -221,7 +221,7 @@ export function GraphCanvasSVG({ entities, relationships, ontology, highlightedE
               <text
                 key={domain}
                 x={pos.x}
-                y={pos.y - Math.min(containerSize.width, containerSize.height) * 0.07}
+                y={pos.y - Math.min(containerSize.width, containerSize.height) * 0.14}
                 fill={data.color + "44"}
                 fontSize={11}
                 fontWeight="bold"
@@ -334,7 +334,7 @@ export function GraphCanvasSVG({ entities, relationships, ontology, highlightedE
                 {/* Label */}
                 <text
                   x={x}
-                  y={y + r + 12}
+                  y={y + r + 9}
                   fill={`rgba(255,255,255,${alpha * (isHighlighted ? 1 : 0.75)})`}
                   fontSize={isHovered ? 8.5 : 7}
                   fontWeight={isHighlighted ? "bold" : "normal"}

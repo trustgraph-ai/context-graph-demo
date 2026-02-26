@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { GraphCanvas, NodeDetailPanel, SectionLabel, Badge, LoadingState } from "../components";
+import { GraphCanvasSVG as GraphCanvas, NodeDetailPanel, SectionLabel, Badge, LoadingState } from "../components";
 import { useGraphData } from "../state";
 import { COLLECTION } from "../config";
 import type { Entity } from "../types";
@@ -216,7 +216,7 @@ export function QueryView() {
         <div style={{ flex: 1, padding: "24px 28px", overflowY: "auto" }}>
           {messages.length === 0 ? (
             <div style={{ color: "#444", fontSize: 13, fontStyle: "italic" }}>
-              Select a quick query or type your own question to get started.
+              Type your question to get started.
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
