@@ -14,6 +14,7 @@ const SETTLE_TIME = 10000; // 10 seconds until nodes settle
 
 export function GraphCanvasSVG({ entities, relationships, ontology, highlightedEntities, onNodeClick, activeFilter }: GraphCanvasSVGProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const [hovered, setHovered] = useState<string | null>(null);
   const [settled, setSettled] = useState(false);
@@ -21,6 +22,12 @@ export function GraphCanvasSVG({ entities, relationships, ontology, highlightedE
   const animRef = useRef<number>(0);
   const startTimeRef = useRef<number>(0);
   const lastFrameTimeRef = useRef<number>(0);
+
+  // Zoom and pan state
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const isPanningRef = useRef(false);
+  const lastPanPosRef = useRef({ x: 0, y: 0 });
 
   // Track container size
   useEffect(() => {
@@ -195,6 +202,56 @@ export function GraphCanvasSVG({ entities, relationships, ontology, highlightedE
     onNodeClick(node);
   }, [onNodeClick]);
 
+  // Zoom handler - zoom towards cursor position
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    const newZoom = Math.min(4, Math.max(0.25, zoom * delta));
+
+    // Get cursor position relative to SVG
+    const svg = svgRef.current;
+    if (!svg) return;
+    const rect = svg.getBoundingClientRect();
+    const cursorX = e.clientX - rect.left;
+    const cursorY = e.clientY - rect.top;
+
+    // Adjust pan to zoom towards cursor
+    const zoomRatio = newZoom / zoom;
+    const newPanX = cursorX - (cursorX - pan.x) * zoomRatio;
+    const newPanY = cursorY - (cursorY - pan.y) * zoomRatio;
+
+    setZoom(newZoom);
+    setPan({ x: newPanX, y: newPanY });
+  }, [zoom, pan]);
+
+  // Pan handlers
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    // Only pan with middle mouse or when holding space (we'll just use middle mouse for now)
+    if (e.button === 1 || e.button === 0 && e.shiftKey) {
+      e.preventDefault();
+      isPanningRef.current = true;
+      lastPanPosRef.current = { x: e.clientX, y: e.clientY };
+    }
+  }, []);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isPanningRef.current) return;
+    const dx = e.clientX - lastPanPosRef.current.x;
+    const dy = e.clientY - lastPanPosRef.current.y;
+    lastPanPosRef.current = { x: e.clientX, y: e.clientY };
+    setPan(p => ({ x: p.x + dx, y: p.y + dy }));
+  }, []);
+
+  const handleMouseUp = useCallback(() => {
+    isPanningRef.current = false;
+  }, []);
+
+  // Reset zoom/pan
+  const handleResetView = useCallback(() => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  }, []);
+
   if (containerSize.width === 0) {
     return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
   }
@@ -204,14 +261,26 @@ export function GraphCanvasSVG({ entities, relationships, ontology, highlightedE
     : relationships;
 
   return (
-    <div ref={containerRef} style={{ position: "relative", width: "100%", height: "100%" }}>
+    <div
+      ref={containerRef}
+      style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+    >
       <svg
+        ref={svgRef}
         width={containerSize.width}
         height={containerSize.height}
-        style={{ display: "block", background: "transparent" }}
+        style={{ display: "block", background: "transparent", cursor: isPanningRef.current ? "grabbing" : "default" }}
+        onWheel={handleWheel}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
       >
-        {/* Grid */}
+        {/* Grid - outside transform so it stays fixed */}
         <g>{gridLines}</g>
+
+        {/* Transformed content */}
+        <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
 
         {/* Domain labels */}
         <g>
@@ -347,7 +416,67 @@ export function GraphCanvasSVG({ entities, relationships, ontology, highlightedE
             );
           })}
         </g>
+        </g>{/* Close transform group */}
       </svg>
+
+      {/* Zoom controls */}
+      <div style={{
+        position: "absolute",
+        bottom: 16,
+        right: 16,
+        display: "flex",
+        flexDirection: "column",
+        gap: 4,
+        background: "rgba(15,15,20,0.8)",
+        borderRadius: 8,
+        padding: 4,
+        border: "1px solid rgba(255,255,255,0.1)",
+      }}>
+        <button
+          onClick={() => setZoom(z => Math.min(4, z * 1.2))}
+          style={{
+            width: 28, height: 28, border: "none", borderRadius: 4,
+            background: "rgba(255,255,255,0.1)", color: "#888",
+            cursor: "pointer", fontSize: 16, fontWeight: "bold",
+          }}
+          title="Zoom in"
+        >+</button>
+        <button
+          onClick={() => setZoom(z => Math.max(0.25, z / 1.2))}
+          style={{
+            width: 28, height: 28, border: "none", borderRadius: 4,
+            background: "rgba(255,255,255,0.1)", color: "#888",
+            cursor: "pointer", fontSize: 16, fontWeight: "bold",
+          }}
+          title="Zoom out"
+        >−</button>
+        <button
+          onClick={handleResetView}
+          style={{
+            width: 28, height: 28, border: "none", borderRadius: 4,
+            background: "rgba(255,255,255,0.1)", color: "#888",
+            cursor: "pointer", fontSize: 10, fontWeight: "bold",
+          }}
+          title="Reset view"
+        >⟲</button>
+      </div>
+
+      {/* Zoom indicator */}
+      {zoom !== 1 && (
+        <div style={{
+          position: "absolute",
+          bottom: 16,
+          left: 16,
+          fontSize: 11,
+          fontFamily: "'IBM Plex Mono', monospace",
+          color: "#666",
+          background: "rgba(15,15,20,0.8)",
+          padding: "4px 8px",
+          borderRadius: 4,
+        }}>
+          {Math.round(zoom * 100)}%
+        </div>
+      )}
 
       {/* Tooltip */}
       {hovered && (() => {
