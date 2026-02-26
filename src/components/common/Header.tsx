@@ -33,7 +33,7 @@ export function Header({ activeTab, onTabChange }: HeaderProps) {
           const labels: Record<typeof tab, string> = {
             graph: "◈ Context Graph",
             query: "⚡ Agent Query",
-            data: "▤ Data",
+            data: "▤ Table Explorer",
             ontology: "◇ Ontology",
           };
           return (
