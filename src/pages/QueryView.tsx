@@ -151,31 +151,7 @@ export function QueryView() {
         {/* Query input area */}
         <div style={{ padding: "20px 28px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
           <div style={{ fontSize: 10, color: "#555", fontFamily: "'IBM Plex Mono', monospace", marginBottom: 12, letterSpacing: "0.1em" }}>
-            QUICK QUERIES
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
-            {QUICK_QUERIES.map((q, idx) => (
-              <button
-                key={idx}
-                onClick={() => handleSubmit(q)}
-                disabled={isSubmitting}
-                style={{
-                  padding: "8px 14px", borderRadius: 8,
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  background: "rgba(255,255,255,0.02)",
-                  color: isSubmitting ? "#555" : "#aaa",
-                  cursor: isSubmitting ? "not-allowed" : "pointer",
-                  fontSize: 12, lineHeight: 1.4,
-                  fontFamily: "'IBM Plex Sans', sans-serif",
-                  textAlign: "left",
-                  transition: "all 0.2s",
-                  maxWidth: "100%",
-                }}
-              >
-                <span style={{ color: "#FCD34D88", fontFamily: "'IBM Plex Mono', monospace", fontSize: 10 }}>⚡</span>{" "}
-                {q}
-              </button>
-            ))}
+            AGENT QUERIES
           </div>
 
           <div style={{ display: "flex", gap: 8 }}>
