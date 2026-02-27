@@ -54,15 +54,15 @@ export function DataView() {
   // Embeddings hook - we'll use refetch for manual triggering
   const [embeddingsTerm, setEmbeddingsTerm] = useState("");
   const { embeddings, isLoading: embeddingsLoading, refetch: refetchEmbeddings } = useEmbeddings({
-    flow: "structured",
+    flow: "default",
     term: embeddingsTerm,
   });
 
   // Row embeddings query
-  const { executeQueryAsync } = useRowEmbeddingsQuery({ flow: "structured" });
+  const { executeQueryAsync } = useRowEmbeddingsQuery({ flow: "default" });
 
   // Rows query for fetching full row data
-  const { executeQueryAsync: executeRowsQueryAsync } = useRowsQuery({ flow: "structured" });
+  const { executeQueryAsync: executeRowsQueryAsync } = useRowsQuery({ flow: "default" });
 
   // Parse schemas into usable format
   const schemas: SchemaInfo[] = useMemo(() => {
