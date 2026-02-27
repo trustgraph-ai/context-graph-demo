@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { SectionLabel, FilterButton, Card, LoadingState } from "../components";
 import { useSchemas, useEmbeddings, useRowEmbeddingsQuery, useRowsQuery } from "@trustgraph/react-state";
 import { COLLECTION } from "../config";
@@ -37,35 +37,36 @@ interface AccumulatedMatch {
 }
 
 export function DataView() {
+  // Input state
   const [searchTerm, setSearchTerm] = useState("");
-  const [activeSearchTerm, setActiveSearchTerm] = useState<string | null>(null);
-  const [searchTrigger, setSearchTrigger] = useState(0); // Increments to force re-search
+
+  // Filter state (display only - doesn't trigger re-fetch)
   const [selectedSchema, setSelectedSchema] = useState<string | null>(null);
+
+  // Results state
   const [allMatches, setAllMatches] = useState<AccumulatedMatch[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const lastSearchedRef = useRef<string | null>(null);
+  const [hasSearched, setHasSearched] = useState(false);
 
   // Fetch schemas
   const { schemas: rawSchemas, schemasLoading, schemasError } = useSchemas();
 
-  // Get embeddings for the active search term
-  // Note: passing empty string when no search to avoid null issues
-  const { embeddings, isLoading: embeddingsLoading } = useEmbeddings({
+  // Embeddings hook - we'll use refetch for manual triggering
+  const [embeddingsTerm, setEmbeddingsTerm] = useState("");
+  const { embeddings, isLoading: embeddingsLoading, refetch: refetchEmbeddings } = useEmbeddings({
     flow: "structured",
-    term: activeSearchTerm || "",
+    term: embeddingsTerm,
   });
 
-  // Row embeddings query - now takes vectors instead of text
+  // Row embeddings query
   const { executeQueryAsync } = useRowEmbeddingsQuery({ flow: "structured" });
 
   // Rows query for fetching full row data
   const { executeQueryAsync: executeRowsQueryAsync } = useRowsQuery({ flow: "structured" });
 
-  // Parse schemas into usable format including fields (memoized to prevent rerenders)
-  // rawSchemas appears to be array of [key, schemaObject] pairs or just schema objects
+  // Parse schemas into usable format
   const schemas: SchemaInfo[] = useMemo(() => {
     return (rawSchemas || []).map((s: unknown, idx: number) => {
-      // Handle array format [key, value]
       if (Array.isArray(s)) {
         const schemaData = s[1] as SchemaData | undefined;
         return {
@@ -76,7 +77,6 @@ export function DataView() {
           indexes: schemaData?.indexes || [],
         };
       }
-      // Handle object format
       const schemaObj = s as SchemaData & { key?: string };
       return {
         key: schemaObj.key || schemaObj.name || `schema-${idx}`,
@@ -88,154 +88,121 @@ export function DataView() {
     });
   }, [rawSchemas]);
 
-  // Store refs to avoid stale closures and prevent multiple executions
-  const schemasRef = useRef(schemas);
-  schemasRef.current = schemas;
-  const executeQueryAsyncRef = useRef(executeQueryAsync);
-  executeQueryAsyncRef.current = executeQueryAsync;
-  const executeRowsQueryAsyncRef = useRef(executeRowsQueryAsync);
-  executeRowsQueryAsyncRef.current = executeRowsQueryAsync;
-
-  // Clear results when schema filter changes
-  useEffect(() => {
-    setAllMatches([]);
-  }, [selectedSchema]);
-
   // Build GraphQL query for a schema
   const buildGraphQLQuery = useCallback((schema: SchemaInfo) => {
-    // Convert schema key to valid GraphQL name (replace hyphens with underscores)
     const gqlName = schema.key.replace(/-/g, '_');
     const fieldNames = schema.fields.map(f => f.name).join('\n    ');
     return `query { ${gqlName} { ${fieldNames} } }`;
   }, []);
 
-  const buildGraphQLQueryRef = useRef(buildGraphQLQuery);
-  buildGraphQLQueryRef.current = buildGraphQLQuery;
+  // Core search function - searches ALL schemas, stores ALL results
+  const performSearch = useCallback(async (vectors: number[][]) => {
+    try {
+      // Always search ALL schemas
+      const embeddingsResults = await Promise.all(
+        schemas.map(async (schema) => {
+          try {
+            const matches = await executeQueryAsync({
+              vectors,
+              schemaName: schema.key,
+              collection: COLLECTION,
+              limit: 10,
+            });
+            return matches.map(m => ({ ...m, schemaKey: schema.key }));
+          } catch {
+            return [];
+          }
+        })
+      );
 
-  // Trigger search - sets the active search term to start embeddings lookup
-  const handleSearch = useCallback(() => {
-    if (!searchTerm.trim()) return;
+      const flatMatches = embeddingsResults.flat();
+
+      // Deduplicate
+      const seen = new Set<string>();
+      const uniqueMatches = flatMatches.filter(match => {
+        const key = `${match.schemaKey}:${match.index_value.join(',')}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      // Fetch full row data for schemas with matches
+      const schemaKeysWithMatches = [...new Set(uniqueMatches.map(m => m.schemaKey))];
+      const rowDataBySchema: Record<string, Record<string, unknown>[]> = {};
+
+      await Promise.all(
+        schemaKeysWithMatches.map(async (schemaKey) => {
+          const schema = schemas.find(s => s.key === schemaKey);
+          if (!schema || schema.fields.length === 0) return;
+
+          try {
+            const query = buildGraphQLQuery(schema);
+            const result = await executeRowsQueryAsync({ query, collection: COLLECTION });
+            const gqlName = schemaKey.replace(/-/g, '_');
+            const rows = (result?.data as Record<string, unknown[]>)?.[gqlName] || [];
+            rowDataBySchema[schemaKey] = rows as Record<string, unknown>[];
+          } catch (err) {
+            console.error(`Failed to fetch rows for ${schemaKey}:`, err);
+          }
+        })
+      );
+
+      // Match row data to embeddings results
+      const matchesWithRowData = uniqueMatches.map(match => {
+        const rows = rowDataBySchema[match.schemaKey] || [];
+        const indexFields = match.index_name.split('.');
+        const indexFieldName = indexFields[indexFields.length - 1];
+
+        const matchedRow = rows.find(row => {
+          const rowValue = row[indexFieldName];
+          return match.index_value.some(iv =>
+            String(rowValue).toLowerCase() === iv.toLowerCase()
+          );
+        });
+
+        return { ...match, rowData: matchedRow };
+      });
+
+      setAllMatches(matchesWithRowData);
+      setHasSearched(true);
+    } finally {
+      setIsSearching(false);
+    }
+  }, [schemas, executeQueryAsync, executeRowsQueryAsync, buildGraphQLQuery]);
+
+  // Handle search button click
+  const handleSearch = useCallback(async () => {
     const term = searchTerm.trim();
+    if (!term) return;
+
     setIsSearching(true);
     setAllMatches([]);
-    lastSearchedRef.current = null; // Reset so we can search again
-    setSearchTrigger(t => t + 1); // Force effect to re-run even if same term
-    setActiveSearchTerm(term);
-  }, [searchTerm]);
 
-  // When embeddings are ready, perform the search (only once per search term)
-  const searchInProgressRef = useRef(false);
-
-  useEffect(() => {
-    // Guard: need active search term, embeddings ready, not already searched this term
-    if (!activeSearchTerm || !embeddings || embeddings.length === 0 || embeddingsLoading) {
-      return;
+    // If same term, use refetch; otherwise set new term
+    if (term === embeddingsTerm && embeddings && embeddings.length > 0) {
+      // Same term - we already have embeddings, just re-run the search
+      await performSearch(embeddings);
+    } else {
+      // New term - update embeddings term and wait for it
+      setEmbeddingsTerm(term);
     }
-    if (lastSearchedRef.current === activeSearchTerm || searchInProgressRef.current) {
-      return; // Already searched this term or search in progress
-    }
-    searchInProgressRef.current = true;
-    lastSearchedRef.current = activeSearchTerm;
+  }, [searchTerm, embeddingsTerm, embeddings, performSearch]);
 
-    const performSearch = async () => {
-      const currentSchemas = schemasRef.current;
-      const currentSelectedSchema = selectedSchema;
-      const schemasToSearch = currentSelectedSchema
-        ? currentSchemas.filter(s => s.key === currentSelectedSchema)
-        : currentSchemas;
+  // When embeddings become available for a new term, run the search
+  // This only triggers when embeddingsTerm changes and embeddings load
+  const prevEmbeddingsTermRef = useMemo(() => ({ current: "" }), []);
 
-      try {
-        // Search all selected schemas in parallel with vectors
-        const embeddingsResults = await Promise.all(
-          schemasToSearch.map(async (schema) => {
-            try {
-              const matches = await executeQueryAsyncRef.current({
-                vectors: embeddings,
-                schemaName: schema.key,
-                collection: COLLECTION,
-                limit: currentSelectedSchema ? 20 : 10,
-              });
-              // Tag each match with its schema
-              return matches.map(m => ({
-                ...m,
-                schemaKey: schema.key,
-              }));
-            } catch {
-              return [];
-            }
-          })
-        );
-
-        const flatMatches = embeddingsResults.flat();
-
-        // Deduplicate matches by schemaKey + index_value combination
-        const seen = new Set<string>();
-        const uniqueMatches = flatMatches.filter(match => {
-          const key = `${match.schemaKey}:${match.index_value.join(',')}`;
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        });
-
-        // Now fetch full row data for each schema that has matches
-        const schemaKeysWithMatches = [...new Set(uniqueMatches.map(m => m.schemaKey))];
-
-        // Fetch all rows for schemas with matches
-        const rowDataBySchema: Record<string, Record<string, unknown>[]> = {};
-
-        await Promise.all(
-          schemaKeysWithMatches.map(async (schemaKey) => {
-            const schema = currentSchemas.find(s => s.key === schemaKey);
-            if (!schema || schema.fields.length === 0) return;
-
-            try {
-              const query = buildGraphQLQueryRef.current(schema);
-              const result = await executeRowsQueryAsyncRef.current({
-                query,
-                collection: COLLECTION,
-              });
-
-              // Result should have data.schemaName array
-              const gqlName = schemaKey.replace(/-/g, '_');
-              const rows = (result?.data as Record<string, unknown[]>)?.[gqlName] || [];
-              rowDataBySchema[schemaKey] = rows as Record<string, unknown>[];
-            } catch (err) {
-              console.error(`Failed to fetch rows for ${schemaKey}:`, err);
-            }
-          })
-        );
-
-        // Match row data to embeddings results using index values
-        const matchesWithRowData = uniqueMatches.map(match => {
-          const rows = rowDataBySchema[match.schemaKey] || [];
-          // Try to find the matching row by index value
-          // The index_value contains the key values for this match
-          const indexFields = match.index_name.split('.');
-          const indexFieldName = indexFields[indexFields.length - 1]; // Get last part as field name
-
-          const matchedRow = rows.find(row => {
-            const rowValue = row[indexFieldName];
-            // Check if any index value matches
-            return match.index_value.some(iv =>
-              String(rowValue).toLowerCase() === iv.toLowerCase()
-            );
-          });
-
-          return {
-            ...match,
-            rowData: matchedRow,
-          };
-        });
-
-        setAllMatches(matchesWithRowData);
-      } finally {
-        setIsSearching(false);
-        searchInProgressRef.current = false;
-      }
-    };
-
-    performSearch();
-  }, [activeSearchTerm, searchTrigger, embeddings, embeddingsLoading, selectedSchema]);
+  if (
+    isSearching &&
+    embeddingsTerm &&
+    embeddings &&
+    embeddings.length > 0 &&
+    !embeddingsLoading &&
+    prevEmbeddingsTermRef.current !== embeddingsTerm
+  ) {
+    prevEmbeddingsTermRef.current = embeddingsTerm;
+    performSearch(embeddings);
+  }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
@@ -243,14 +210,22 @@ export function DataView() {
     }
   };
 
-  // Group matches by schema
-  const matchesBySchema = allMatches.reduce((acc, match) => {
-    if (!acc[match.schemaKey]) {
-      acc[match.schemaKey] = [];
-    }
-    acc[match.schemaKey].push(match);
-    return acc;
-  }, {} as Record<string, AccumulatedMatch[]>);
+  // Filter results for display (doesn't affect stored data)
+  const displayMatches = useMemo(() => {
+    if (!selectedSchema) return allMatches;
+    return allMatches.filter(m => m.schemaKey === selectedSchema);
+  }, [allMatches, selectedSchema]);
+
+  // Group filtered matches by schema for display
+  const matchesBySchema = useMemo(() => {
+    return displayMatches.reduce((acc, match) => {
+      if (!acc[match.schemaKey]) {
+        acc[match.schemaKey] = [];
+      }
+      acc[match.schemaKey].push(match);
+      return acc;
+    }, {} as Record<string, AccumulatedMatch[]>);
+  }, [displayMatches]);
 
   if (schemasLoading) {
     return <LoadingState message="Loading schemas..." />;
@@ -268,7 +243,7 @@ export function DataView() {
         borderBottom: "1px solid rgba(255,255,255,0.04)",
         flexWrap: "wrap",
       }}>
-        <span style={{ fontSize: 11, color: "#555", fontFamily: "'IBM Plex Mono', monospace", marginRight: 8 }}>SCHEMA:</span>
+        <span style={{ fontSize: 11, color: "#555", fontFamily: "'IBM Plex Mono', monospace", marginRight: 8 }}>FILTER:</span>
         <FilterButton
           label="All"
           isActive={!selectedSchema}
@@ -283,7 +258,7 @@ export function DataView() {
           />
         ))}
         <div style={{ marginLeft: "auto", fontSize: 11, color: "#444", fontFamily: "'IBM Plex Mono', monospace" }}>
-          {schemas.length} schemas
+          {selectedSchema ? `${displayMatches.length} of ${allMatches.length}` : `${allMatches.length}`} results
         </div>
       </div>
 
@@ -331,13 +306,17 @@ export function DataView() {
 
       {/* Results Area */}
       <div style={{ flex: 1, padding: "24px 28px", overflowY: "auto" }}>
-        {allMatches.length === 0 && !isSearching ? (
+        {!hasSearched && !isSearching ? (
           <div style={{ color: "#444", fontSize: 13, fontStyle: "italic" }}>
             Enter a search term to find data across tables.
           </div>
         ) : isSearching ? (
           <div style={{ color: "#93C5FD", fontSize: 13 }}>
             Searching...
+          </div>
+        ) : displayMatches.length === 0 ? (
+          <div style={{ color: "#444", fontSize: 13, fontStyle: "italic" }}>
+            {selectedSchema ? "No matches in this schema. Try selecting 'All'." : "No matches found."}
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
@@ -388,7 +367,6 @@ export function DataView() {
                           e.currentTarget.style.background = "transparent";
                         }}
                       >
-                        {/* Row Data or Match Text */}
                         {match.rowData ? (
                           <div style={{
                             display: "grid",
@@ -428,7 +406,6 @@ export function DataView() {
                           </div>
                         )}
 
-                        {/* Score Badge */}
                         <div style={{
                           display: "flex",
                           justifyContent: "flex-end",
