@@ -13,12 +13,11 @@ export function Header({ activeTab, onTabChange }: HeaderProps) {
       background: "linear-gradient(180deg, rgba(15,15,22,1) 0%, rgba(10,10,15,1) 100%)",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <div style={{
-          width: 36, height: 36, borderRadius: 8,
-          background: "linear-gradient(135deg, #6EE7B7 0%, #93C5FD 50%, #F9A8D4 100%)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 18, fontWeight: 900, color: "#0A0A0F",
-        }}>TG</div>
+        <img
+          src="/tg.svg"
+          alt="TrustGraph"
+          style={{ width: 36, height: 36, borderRadius: 8 }}
+        />
         <div>
           <div style={{ fontWeight: 700, fontSize: 16, letterSpacing: "-0.02em", color: "#fff" }}>
             TrustGraph
