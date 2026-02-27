@@ -5,6 +5,7 @@ import { COLLECTION } from "../config";
 import type { Entity } from "../types";
 import { useChat, useConversation, useEmbeddings, useGraphEmbeddings } from "@trustgraph/react-state";
 import { getLocalName } from "../utils";
+import { palette, text, border, withGlow } from "../theme";
 
 // Type for embedding result items
 interface EmbeddingResultItem {
@@ -125,7 +126,7 @@ export function QueryView() {
     <div style={{ display: "flex", height: "calc(100vh - 110px)" }}>
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         {/* Query input area */}
-        <div style={{ padding: "20px 28px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+        <div style={{ padding: "20px 28px", borderBottom: `1px solid ${border.default}` }}>
           <SectionLabel marginBottom={12}>AGENT QUERIES</SectionLabel>
 
           <SearchInput
@@ -135,19 +136,19 @@ export function QueryView() {
             placeholder="Type your own question..."
             buttonText="Ask"
             isLoading={isSubmitting}
-            buttonColor="#FCD34D"
+            buttonColor={palette.amber}
           />
         </div>
 
         {/* Related entities from graph embeddings */}
         {queryForEmbeddings && (
-          <div style={{ padding: "16px 28px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ padding: "16px 28px", borderBottom: `1px solid ${border.default}` }}>
             <SectionLabel>
-              RELATED ENTITIES {(embeddingsLoading || graphEmbeddingsLoading) && <span style={{ color: "#FCD34D" }}>loading...</span>}
+              RELATED ENTITIES {(embeddingsLoading || graphEmbeddingsLoading) && <span style={{ color: palette.amber }}>loading...</span>}
             </SectionLabel>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {embeddingResults.length === 0 && !embeddingsLoading && !graphEmbeddingsLoading && (
-                <span style={{ fontSize: 11, color: "#555", fontStyle: "italic" }}>No related concepts found</span>
+                <span style={{ fontSize: 11, color: text.disabled, fontStyle: "italic" }}>No related concepts found</span>
               )}
               {embeddingResults.map((item) => {
                 const isSelected = selectedEntityId === item.id;
@@ -173,7 +174,7 @@ export function QueryView() {
         {/* Response area */}
         <div style={{ flex: 1, padding: "24px 28px", overflowY: "auto" }}>
           {messages.length === 0 ? (
-            <div style={{ color: "#444", fontSize: 13, fontStyle: "italic" }}>
+            <div style={{ color: text.hint, fontSize: 13, fontStyle: "italic" }}>
               Type your question to get started.
             </div>
           ) : (
@@ -185,7 +186,7 @@ export function QueryView() {
                 <div style={{
                   padding: "8px 12px",
                   fontSize: 11,
-                  color: "#FCD34D66",
+                  color: withGlow(palette.amber, 0.4),
                   fontFamily: "'IBM Plex Mono', monospace"
                 }}>
                   Processing...
@@ -198,7 +199,7 @@ export function QueryView() {
       </div>
 
       {/* Graph visualization */}
-      <div style={{ width: selectedNode ? "30%" : "45%", borderLeft: "1px solid rgba(255,255,255,0.06)", transition: "width 0.2s" }}>
+      <div style={{ width: selectedNode ? "30%" : "45%", borderLeft: `1px solid ${border.default}`, transition: "width 0.2s" }}>
         <GraphCanvas
           entities={entities}
           relationships={relationships}

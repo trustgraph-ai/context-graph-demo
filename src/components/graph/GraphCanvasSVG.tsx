@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import type { DomainKey, Entity, GraphNode, OntologyType, Relationship } from "../../types";
 import { ZoomControls } from "./ZoomControls";
+import { border } from "../../theme";
 
 interface GraphCanvasSVGProps {
   entities: Entity[];
@@ -160,12 +161,12 @@ export function GraphCanvasSVG({ entities, relationships, ontology, highlightedE
 
     for (let x = 0; x < width; x += 30) {
       lines.push(
-        <line key={`v-${x}`} x1={x} y1={0} x2={x} y2={height} stroke="rgba(255,255,255,0.015)" strokeWidth={0.5} />
+        <line key={`v-${x}`} x1={x} y1={0} x2={x} y2={height} stroke={border.grid} strokeWidth={0.5} />
       );
     }
     for (let y = 0; y < height; y += 30) {
       lines.push(
-        <line key={`h-${y}`} x1={0} y1={y} x2={width} y2={y} stroke="rgba(255,255,255,0.015)" strokeWidth={0.5} />
+        <line key={`h-${y}`} x1={0} y1={y} x2={width} y2={y} stroke={border.grid} strokeWidth={0.5} />
       );
     }
     return lines;

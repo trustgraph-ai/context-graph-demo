@@ -2,24 +2,14 @@ import { useMemo } from "react";
 import { useTriples } from "@trustgraph/react-state";
 import type { Entity, Relationship, DomainKey, OntologyType } from "../types";
 import { COLLECTION } from "../config";
+import { domainColors } from "../theme";
+
 const RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
 const RDFS_LABEL = "http://www.w3.org/2000/01/rdf-schema#label";
 const RDFS_COMMENT = "http://www.w3.org/2000/01/rdf-schema#comment";
 const OWL_CLASS = "http://www.w3.org/2002/07/owl#Class";
 const OWL_DATATYPE_PROPERTY = "http://www.w3.org/2002/07/owl#DatatypeProperty";
 const OWL_OBJECT_PROPERTY = "http://www.w3.org/2002/07/owl#ObjectProperty";
-
-// Color palette for dynamic class coloring
-const COLOR_PALETTE = [
-  { color: "#6EE7B7", glow: "rgba(110,231,183,0.4)" },
-  { color: "#F9A8D4", glow: "rgba(249,168,212,0.4)" },
-  { color: "#93C5FD", glow: "rgba(147,197,253,0.4)" },
-  { color: "#FCD34D", glow: "rgba(252,211,77,0.4)" },
-  { color: "#C4B5FD", glow: "rgba(196,181,253,0.4)" },
-  { color: "#FDA4AF", glow: "rgba(253,164,175,0.4)" },
-  { color: "#67E8F9", glow: "rgba(103,232,249,0.4)" },
-  { color: "#FCA5A5", glow: "rgba(252,165,165,0.4)" },
-];
 
 // Helper to extract value from a Term
 function getTermValue(term: { t: string; i?: string; v?: string }): string {
@@ -106,7 +96,7 @@ export function useGraphData(domain?: DomainKey) {
     let colorIndex = 0;
     for (const classUri of owlClasses) {
       const localName = uriToId(classUri).toLowerCase();
-      const palette = COLOR_PALETTE[colorIndex % COLOR_PALETTE.length];
+      const palette = domainColors[colorIndex % domainColors.length];
       classConfig.set(classUri, {
         domain: localName,
         color: palette.color,

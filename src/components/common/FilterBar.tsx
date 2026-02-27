@@ -1,4 +1,5 @@
 import { FilterButton } from "./FilterButton";
+import { text, border } from "../../theme";
 
 export interface FilterItem {
   key: string;
@@ -36,15 +37,15 @@ export function FilterBar({
       display: "flex",
       gap: 8,
       alignItems: "center",
-      borderBottom: "1px solid rgba(255,255,255,0.04)",
+      borderBottom: `1px solid ${border.subtle}`,
       flexWrap: "wrap",
     }}>
-      <span style={{ fontSize: 11, color: "#555", fontFamily: "'IBM Plex Mono', monospace", marginRight: 8 }}>
+      <span style={{ fontSize: 11, color: text.disabled, fontFamily: "'IBM Plex Mono', monospace", marginRight: 8 }}>
         FILTER:
       </span>
 
       {emptyMessage && items.length === 0 ? (
-        <span style={{ fontSize: 11, color: "#555", fontStyle: "italic" }}>{emptyMessage}</span>
+        <span style={{ fontSize: 11, color: text.disabled, fontStyle: "italic" }}>{emptyMessage}</span>
       ) : (
         <>
           {showAll && (
@@ -68,7 +69,7 @@ export function FilterBar({
       )}
 
       {stats && (
-        <div style={{ marginLeft: "auto", fontSize: 11, color: "#444", fontFamily: "'IBM Plex Mono', monospace" }}>
+        <div style={{ marginLeft: "auto", fontSize: 11, color: text.hint, fontFamily: "'IBM Plex Mono', monospace" }}>
           {stats}
         </div>
       )}

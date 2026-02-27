@@ -3,6 +3,7 @@ import { SectionLabel, Card, LoadingState, SearchInput, FilterBar } from "../com
 import type { FilterItem } from "../components";
 import { useSchemas, useEmbeddings, useRowEmbeddingsQuery, useRowsQuery } from "@trustgraph/react-state";
 import { COLLECTION } from "../config";
+import { semantic, palette, text, border, surface } from "../theme";
 
 // Schema field type
 interface SchemaField {
@@ -251,7 +252,7 @@ export function DataView() {
       />
 
       {/* Search Input */}
-      <div style={{ padding: "20px 28px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+      <div style={{ padding: "20px 28px", borderBottom: `1px solid ${border.default}` }}>
         <SectionLabel marginBottom={12}>SEARCH DATA</SectionLabel>
         <SearchInput
           value={searchTerm}
@@ -260,22 +261,22 @@ export function DataView() {
           placeholder="Search for data across tables..."
           buttonText="Search"
           isLoading={isSearching}
-          buttonColor="#93C5FD"
+          buttonColor={palette.blue}
         />
       </div>
 
       {/* Results Area */}
       <div style={{ flex: 1, padding: "24px 28px", overflowY: "auto" }}>
         {!hasSearched && !isSearching ? (
-          <div style={{ color: "#444", fontSize: 13, fontStyle: "italic" }}>
+          <div style={{ color: text.hint, fontSize: 13, fontStyle: "italic" }}>
             Enter a search term to find data across tables.
           </div>
         ) : isSearching ? (
-          <div style={{ color: "#93C5FD", fontSize: 13 }}>
+          <div style={{ color: palette.blue, fontSize: 13 }}>
             Searching...
           </div>
         ) : displayMatches.length === 0 ? (
-          <div style={{ color: "#444", fontSize: 13, fontStyle: "italic" }}>
+          <div style={{ color: text.hint, fontSize: 13, fontStyle: "italic" }}>
             {selectedSchema ? "No matches in this schema. Try selecting 'All'." : "No matches found."}
           </div>
         ) : (
@@ -289,7 +290,7 @@ export function DataView() {
                   {/* Table Header */}
                   <div style={{
                     padding: "12px 16px",
-                    borderBottom: "1px solid rgba(255,255,255,0.06)",
+                    borderBottom: `1px solid ${border.default}`,
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
@@ -297,14 +298,14 @@ export function DataView() {
                     <span style={{
                       fontSize: 12,
                       fontWeight: 600,
-                      color: "#93C5FD",
+                      color: palette.blue,
                       fontFamily: "'IBM Plex Mono', monospace",
                     }}>
                       ▤ {schema?.name || schemaKey}
                     </span>
                     <span style={{
                       fontSize: 11,
-                      color: "#555",
+                      color: text.disabled,
                       fontFamily: "'IBM Plex Mono', monospace",
                     }}>
                       {schemaMatches.length} matches
@@ -318,10 +319,10 @@ export function DataView() {
                         key={idx}
                         style={{
                           padding: "12px 16px",
-                          borderBottom: "1px solid rgba(255,255,255,0.03)",
+                          borderBottom: `1px solid ${border.subtle}`,
                         }}
                         onMouseEnter={(e) => {
-                          e.currentTarget.style.background = "rgba(255,255,255,0.02)";
+                          e.currentTarget.style.background = surface.card;
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.background = "transparent";
@@ -338,7 +339,7 @@ export function DataView() {
                               <div key={key}>
                                 <span style={{
                                   fontSize: 10,
-                                  color: "#666",
+                                  color: text.faint,
                                   fontFamily: "'IBM Plex Mono', monospace",
                                   textTransform: "uppercase",
                                 }}>
@@ -346,7 +347,7 @@ export function DataView() {
                                 </span>
                                 <div style={{
                                   fontSize: 13,
-                                  color: "#ddd",
+                                  color: text.primary,
                                   marginTop: 2,
                                   wordBreak: "break-word",
                                 }}>
@@ -358,7 +359,7 @@ export function DataView() {
                         ) : (
                           <div style={{
                             fontSize: 13,
-                            color: "#ddd",
+                            color: text.primary,
                             marginBottom: 6,
                             lineHeight: 1.5,
                           }}>
@@ -373,7 +374,7 @@ export function DataView() {
                           fontFamily: "'IBM Plex Mono', monospace",
                         }}>
                           <span style={{
-                            color: match.score > 0.8 ? "#6EE7B7" : match.score > 0.5 ? "#FCD34D" : "#888",
+                            color: match.score > 0.8 ? semantic.success : match.score > 0.5 ? palette.amber : text.subtle,
                           }}>
                             {(match.score * 100).toFixed(1)}% match
                           </span>

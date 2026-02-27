@@ -1,3 +1,5 @@
+import { text, surface, border, palette } from "../../theme";
+
 interface SearchInputProps {
   value: string;
   onChange: (value: string) => void;
@@ -16,7 +18,7 @@ export function SearchInput({
   placeholder = "Search...",
   buttonText = "Search",
   isLoading = false,
-  buttonColor = "#93C5FD",
+  buttonColor = palette.blue,
   disabled = false,
 }: SearchInputProps) {
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -41,9 +43,9 @@ export function SearchInput({
           flex: 1,
           padding: "12px 16px",
           borderRadius: 8,
-          border: "1px solid rgba(255,255,255,0.1)",
-          background: "rgba(255,255,255,0.02)",
-          color: "#ddd",
+          border: `1px solid ${border.medium}`,
+          background: surface.card,
+          color: text.primary,
           fontSize: 14,
           fontFamily: "'IBM Plex Sans', sans-serif",
           outline: "none",
@@ -56,8 +58,8 @@ export function SearchInput({
           padding: "12px 20px",
           borderRadius: 8,
           border: `1px solid ${buttonColor}44`,
-          background: isDisabled ? "rgba(255,255,255,0.02)" : `${buttonColor}1a`,
-          color: isDisabled ? "#555" : buttonColor,
+          background: isDisabled ? surface.card : `${buttonColor}1a`,
+          color: isDisabled ? text.disabled : buttonColor,
           cursor: isDisabled ? "not-allowed" : "pointer",
           fontSize: 13,
           fontWeight: 600,

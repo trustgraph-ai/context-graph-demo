@@ -1,5 +1,6 @@
 import type { Entity, Relationship, OntologyType } from "../../types";
 import { SectionLabel, Card } from "../common";
+import { text, border } from "../../theme";
 
 interface NodeDetailPanelProps {
   node: Entity;
@@ -19,14 +20,14 @@ export function NodeDetailPanel({ node, relationships, entities, ontology, prope
 
   return (
     <div style={{
-      width: 320, flexShrink: 0, borderLeft: "1px solid rgba(255,255,255,0.06)",
+      width: 320, flexShrink: 0, borderLeft: `1px solid ${border.default}`,
       background: "rgba(12,12,18,0.95)", padding: 24, overflowY: "auto",
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <div style={{ color: ontology[node.domain].color, fontSize: 11, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 600 }}>
           {ontology[node.domain].label.toUpperCase()} ENTITY
         </div>
-        <button onClick={onClose} style={{ background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: 18 }}>×</button>
+        <button onClick={onClose} style={{ background: "none", border: "none", color: text.faint, cursor: "pointer", fontSize: 18 }}>×</button>
       </div>
       <div style={{ fontSize: 20, fontWeight: 700, color: "#fff", marginBottom: 6 }}>
         {node.icon} {node.label}
@@ -34,9 +35,9 @@ export function NodeDetailPanel({ node, relationships, entities, ontology, prope
       <div style={{ marginTop: 20 }}>
         <SectionLabel>PROPERTIES</SectionLabel>
         {Object.entries(node.props || {}).map(([k, v]) => (
-          <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-            <span style={{ fontSize: 12, color: "#888" }}>{propertyLabels[k] || k}</span>
-            <span style={{ fontSize: 12, color: "#ddd", fontFamily: "'IBM Plex Mono', monospace", textAlign: "right" }}>{String(v)}</span>
+          <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${border.subtle}` }}>
+            <span style={{ fontSize: 12, color: text.subtle }}>{propertyLabels[k] || k}</span>
+            <span style={{ fontSize: 12, color: text.primary, fontFamily: "'IBM Plex Mono', monospace", textAlign: "right" }}>{String(v)}</span>
           </div>
         ))}
       </div>
@@ -54,10 +55,10 @@ export function NodeDetailPanel({ node, relationships, entities, ontology, prope
               onClick={() => { if (other) onNodeSelect(other); }}
               style={{ marginBottom: 4 }}
             >
-              <div style={{ fontSize: 11, color: "#aaa" }}>
-                <span style={{ color: other?.color || "#888" }}>{direction} {other?.label}</span>
+              <div style={{ fontSize: 11, color: text.muted }}>
+                <span style={{ color: other?.color || text.subtle }}>{direction} {other?.label}</span>
               </div>
-              <div style={{ fontSize: 10, color: "#666", fontFamily: "'IBM Plex Mono', monospace", marginTop: 2 }}>
+              <div style={{ fontSize: 10, color: text.faint, fontFamily: "'IBM Plex Mono', monospace", marginTop: 2 }}>
                 {r.predicate.replace(/_/g, " ")}
               </div>
             </Card>

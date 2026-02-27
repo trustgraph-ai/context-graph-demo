@@ -1,3 +1,5 @@
+import { surface, border, text } from "../../theme";
+
 interface ZoomControlsProps {
   zoom: number;
   onZoomIn: () => void;
@@ -11,8 +13,8 @@ export function ZoomControls({ zoom, onZoomIn, onZoomOut, onReset }: ZoomControl
     height: 28,
     border: "none",
     borderRadius: 4,
-    background: "rgba(255,255,255,0.1)",
-    color: "#888",
+    background: border.medium,
+    color: text.subtle,
     cursor: "pointer",
     fontSize: 16,
     fontWeight: "bold",
@@ -28,10 +30,10 @@ export function ZoomControls({ zoom, onZoomIn, onZoomOut, onReset }: ZoomControl
         display: "flex",
         flexDirection: "column",
         gap: 4,
-        background: "rgba(15,15,20,0.8)",
+        background: surface.overlayLight,
         borderRadius: 8,
         padding: 4,
-        border: "1px solid rgba(255,255,255,0.1)",
+        border: `1px solid ${border.medium}`,
       }}>
         <button
           onClick={onZoomIn}
@@ -58,8 +60,8 @@ export function ZoomControls({ zoom, onZoomIn, onZoomOut, onReset }: ZoomControl
           left: 16,
           fontSize: 11,
           fontFamily: "'IBM Plex Mono', monospace",
-          color: "#666",
-          background: "rgba(15,15,20,0.8)",
+          color: text.faint,
+          background: surface.overlayLight,
           padding: "4px 8px",
           borderRadius: 4,
         }}>

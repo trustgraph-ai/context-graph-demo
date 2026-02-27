@@ -1,27 +1,28 @@
 import { useConnectionState } from "@trustgraph/react-provider";
 import { useProgressStateStore } from "@trustgraph/react-state";
+import { semantic, palette, text, border } from "../../theme";
 
 export function StatusBar() {
   const connectionState = useConnectionState();
   const activity = useProgressStateStore((state) => state.activity);
 
   const getStatusDisplay = () => {
-    if (!connectionState) return { color: "#888", text: "Initializing..." };
+    if (!connectionState) return { color: text.subtle, text: "Initializing..." };
     switch (connectionState.status) {
       case "authenticated":
-        return { color: "#6EE7B7", text: "Authenticated" };
+        return { color: semantic.success, text: "Authenticated" };
       case "connected":
-        return { color: "#6EE7B7", text: "Connected" };
+        return { color: semantic.success, text: "Connected" };
       case "unauthenticated":
-        return { color: "#93C5FD", text: "Connected" };
+        return { color: semantic.info, text: "Connected" };
       case "connecting":
-        return { color: "#FCD34D", text: "Connecting..." };
+        return { color: palette.amber, text: "Connecting..." };
       case "reconnecting":
-        return { color: "#F97316", text: `Reconnecting (${connectionState.reconnectAttempt}/${connectionState.maxAttempts})...` };
+        return { color: semantic.warning, text: `Reconnecting (${connectionState.reconnectAttempt}/${connectionState.maxAttempts})...` };
       case "failed":
-        return { color: "#f66", text: "Connection failed" };
+        return { color: semantic.error, text: "Connection failed" };
       default:
-        return { color: "#888", text: connectionState.status };
+        return { color: text.subtle, text: connectionState.status };
     }
   };
 
@@ -31,27 +32,27 @@ export function StatusBar() {
   return (
     <div style={{
       position: "fixed", bottom: 0, left: 0, right: 0,
-      padding: "8px 28px", borderTop: "1px solid rgba(255,255,255,0.04)",
+      padding: "8px 28px", borderTop: `1px solid ${border.subtle}`,
       background: "rgba(10,10,15,0.95)", backdropFilter: "blur(8px)",
       display: "flex", justifyContent: "space-between", alignItems: "center",
-      fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: "#444",
+      fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: text.hint,
     }}>
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         {activeActivity ? (
           <>
-            <span style={{ color: "#FCD34D" }}>◌</span>
-            <span style={{ color: "#666" }}>{activeActivity}...</span>
+            <span style={{ color: palette.amber }}>◌</span>
+            <span style={{ color: text.faint }}>{activeActivity}...</span>
           </>
         ) : (
           <>
-            <span style={{ color: "#6EE7B7" }}>◈</span>
-            <span style={{ color: "#555" }}>Ready</span>
+            <span style={{ color: semantic.success }}>◈</span>
+            <span style={{ color: text.disabled }}>Ready</span>
           </>
         )}
       </div>
       <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
         <span style={{ color: status.color }}>●</span> {status.text}
-        <span style={{ color: "#888" }}>|</span>
+        <span style={{ color: text.subtle }}>|</span>
         <span>trustgraph.ai</span>
       </div>
     </div>

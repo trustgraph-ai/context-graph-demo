@@ -1,10 +1,11 @@
 import { useToastStore, Toast, ToastType } from "../../state/toastStore";
+import { semantic, surface, text } from "../../theme";
 
 const typeStyles: Record<ToastType, { color: string; icon: string }> = {
-  success: { color: "#6EE7B7", icon: "✓" },
-  error: { color: "#f66", icon: "✕" },
-  warning: { color: "#F97316", icon: "!" },
-  info: { color: "#93C5FD", icon: "i" },
+  success: { color: semantic.success, icon: "✓" },
+  error: { color: semantic.error, icon: "✕" },
+  warning: { color: semantic.warning, icon: "!" },
+  info: { color: semantic.info, icon: "i" },
 };
 
 function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }) {
@@ -17,7 +18,7 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
         alignItems: "center",
         gap: 12,
         padding: "12px 16px",
-        background: "rgba(15,15,20,0.95)",
+        background: surface.overlay,
         borderRadius: 8,
         borderLeft: `3px solid ${style.color}`,
         backdropFilter: "blur(12px)",
@@ -48,7 +49,7 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
         style={{
           flex: 1,
           fontSize: 12,
-          color: "#ccc",
+          color: text.secondary,
           fontFamily: "'IBM Plex Sans', sans-serif",
           lineHeight: 1.4,
         }}
@@ -60,7 +61,7 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
         style={{
           background: "none",
           border: "none",
-          color: "#666",
+          color: text.faint,
           cursor: "pointer",
           fontSize: 16,
           padding: 4,

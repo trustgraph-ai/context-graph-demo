@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback, useState, MouseEvent } from "react";
 import type { DomainKey, Entity, GraphNode, OntologyType, Relationship } from "../../types";
 import { ZoomControls } from "./ZoomControls";
+import { border } from "../../theme";
 
 interface GraphCanvasProps {
   entities: Entity[];
@@ -89,7 +90,7 @@ export function GraphCanvas({ entities, relationships, ontology, highlightedEnti
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // Grid stays fixed (no transform)
-    ctx.strokeStyle = "rgba(255,255,255,0.015)";
+    ctx.strokeStyle = border.grid;
     ctx.lineWidth = 1;
     for (let x = 0; x < canvas.width; x += 60) {
       ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();

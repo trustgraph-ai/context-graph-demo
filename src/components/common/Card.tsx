@@ -1,3 +1,5 @@
+import { surface, border } from "../../theme";
+
 interface CardProps {
   children: React.ReactNode;
   padding?: number | string;
@@ -11,7 +13,7 @@ export function Card({
   children,
   padding = 24,
   borderRadius = 12,
-  borderColor = "rgba(255,255,255,0.04)",
+  borderColor = border.subtle,
   onClick,
   style,
 }: CardProps) {
@@ -21,7 +23,7 @@ export function Card({
       style={{
         padding,
         borderRadius,
-        background: "rgba(255,255,255,0.02)",
+        background: surface.card,
         border: `1px solid ${borderColor}`,
         cursor: onClick ? "pointer" : undefined,
         ...style,

@@ -1,3 +1,5 @@
+import { semantic, text } from "../../theme";
+
 interface LoadingStateProps {
   message?: string;
   variant?: "loading" | "error";
@@ -13,7 +15,7 @@ export function LoadingState({ message, variant = "loading" }: LoadingStateProps
       alignItems: "center",
       justifyContent: "center",
       height: "100%",
-      color: isError ? "#f66" : "#666",
+      color: isError ? semantic.error : text.faint,
     }}>
       {message || defaultMessage}
     </div>
