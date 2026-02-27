@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { GraphCanvasSVG as GraphCanvas, NodeDetailPanel, SectionLabel, Badge, LoadingState } from "../components";
+import { GraphCanvas, NodeDetailPanel, SectionLabel, Badge, LoadingState } from "../components";
 import { useGraphData } from "../state";
 import { COLLECTION } from "../config";
 import type { Entity } from "../types";

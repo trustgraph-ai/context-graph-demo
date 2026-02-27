@@ -35,6 +35,18 @@ export function GraphCanvas({ entities, relationships, ontology, highlightedEnti
   const [hovered, setHovered] = useState<string | null>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
+  // Zoom and pan state
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const zoomRef = useRef(1);
+  const panRef = useRef({ x: 0, y: 0 });
+  const isPanningRef = useRef(false);
+  const lastPanPosRef = useRef({ x: 0, y: 0 });
+
+  // Keep zoom/pan refs in sync
+  zoomRef.current = zoom;
+  panRef.current = pan;
+
   // Keep refs in sync with props
   useEffect(() => {
     highlightedRef.current = highlightedEntities;
@@ -71,11 +83,11 @@ export function GraphCanvas({ entities, relationships, ontology, highlightedEnti
     return () => resizeObserver.disconnect();
   }, []);
 
-  // Draw static layer (grid + domain labels) - only once
+  // Draw static layer (grid + domain labels)
   const drawStaticLayer = useCallback((ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, domainPositions: Record<DomainKey, { x: number; y: number }>) => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Subtle grid
+    // Grid stays fixed (no transform)
     ctx.strokeStyle = "rgba(255,255,255,0.015)";
     ctx.lineWidth = 1;
     for (let x = 0; x < canvas.width; x += 60) {
@@ -85,7 +97,11 @@ export function GraphCanvas({ entities, relationships, ontology, highlightedEnti
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
     }
 
-    // Domain labels
+    // Domain labels with zoom/pan transform
+    ctx.save();
+    ctx.translate(panRef.current.x, panRef.current.y);
+    ctx.scale(zoomRef.current, zoomRef.current);
+
     const currentOntology = ontologyRef.current;
     (Object.entries(domainPositions) as [DomainKey, { x: number; y: number }][]).forEach(([domain, pos]) => {
       const data = currentOntology[domain];
@@ -94,11 +110,19 @@ export function GraphCanvas({ entities, relationships, ontology, highlightedEnti
       ctx.textAlign = "center";
       ctx.fillText(data.label.toUpperCase(), pos.x, pos.y - Math.min(canvas.width, canvas.height) * 0.14);
     });
+
+    ctx.restore();
   }, []);
 
   // Draw nodes layer - reads from refs
   const drawNodesLayer = useCallback((ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, time: number) => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Apply zoom/pan transform
+    ctx.save();
+    ctx.translate(panRef.current.x, panRef.current.y);
+    ctx.scale(zoomRef.current, zoomRef.current);
+
     const nodes = nodesRef.current;
     const settled = settledRef.current;
     const highlighted = highlightedRef.current;
@@ -151,11 +175,19 @@ export function GraphCanvas({ entities, relationships, ontology, highlightedEnti
         node.y += Math.cos(time + node.targetY * 0.01) * 0.3;
       }
     });
+
+    ctx.restore();
   }, []);
 
   // Draw edges layer - reads from refs
   const drawEdgesLayer = useCallback((ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, time: number) => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Apply zoom/pan transform
+    ctx.save();
+    ctx.translate(panRef.current.x, panRef.current.y);
+    ctx.scale(zoomRef.current, zoomRef.current);
+
     const nodes = nodesRef.current;
     const highlighted = highlightedRef.current;
     const filter = activeFilterRef.current;
@@ -203,6 +235,8 @@ export function GraphCanvas({ entities, relationships, ontology, highlightedEnti
         ctx.fill();
       }
     });
+
+    ctx.restore();
   }, []);
 
   // Animation loop function - separate from setup
@@ -354,11 +388,25 @@ export function GraphCanvas({ entities, relationships, ontology, highlightedEnti
   }, [activeFilter, drawNodesLayer, drawEdgesLayer]);
 
   const handleMouseMove = useCallback((e: MouseEvent<HTMLCanvasElement>) => {
+    // Handle panning first
+    if (isPanningRef.current) {
+      const dx = (e.clientX - lastPanPosRef.current.x) * 2;
+      const dy = (e.clientY - lastPanPosRef.current.y) * 2;
+      lastPanPosRef.current = { x: e.clientX, y: e.clientY };
+      setPan(p => ({ x: p.x + dx, y: p.y + dy }));
+      return;
+    }
+
     const canvas = nodesCanvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const x = (e.clientX - rect.left) * 2;
-    const y = (e.clientY - rect.top) * 2;
+
+    // Transform screen coordinates to world coordinates (accounting for zoom/pan)
+    const screenX = (e.clientX - rect.left) * 2;
+    const screenY = (e.clientY - rect.top) * 2;
+    const x = (screenX - panRef.current.x) / zoomRef.current;
+    const y = (screenY - panRef.current.y) / zoomRef.current;
+
     const nodes = nodesRef.current;
     let found: string | null = null;
     for (const node of nodes) {
@@ -372,7 +420,7 @@ export function GraphCanvas({ entities, relationships, ontology, highlightedEnti
     const wasHovered = hoveredRef.current;
     hoveredRef.current = found;
     setHovered(found);
-    canvas.style.cursor = found ? "pointer" : "default";
+    canvas.style.cursor = isPanningRef.current ? "grabbing" : (found ? "pointer" : "default");
 
     // Redraw if hover state changed and we're settled
     if (wasHovered !== found && settledRef.current) {
@@ -388,12 +436,99 @@ export function GraphCanvas({ entities, relationships, ontology, highlightedEnti
     }
   }, [drawNodesLayer, drawEdgesLayer]);
 
-  const handleClick = useCallback(() => {
+  const handleClick = useCallback((e: MouseEvent<HTMLCanvasElement>) => {
+    // Don't trigger click if we were panning
+    if (e.shiftKey) return;
     if (hoveredRef.current && onNodeClick) {
       const node = nodesRef.current.find((n) => n.id === hoveredRef.current);
       if (node) onNodeClick(node);
     }
   }, [onNodeClick]);
+
+  // Redraw all layers (used when zoom/pan changes)
+  const redrawAllLayers = useCallback(() => {
+    const staticCanvas = staticCanvasRef.current;
+    const nodesCanvas = nodesCanvasRef.current;
+    const edgesCanvas = edgesCanvasRef.current;
+    const staticCtx = staticCanvas?.getContext("2d");
+    const nodesCtx = nodesCanvas?.getContext("2d");
+    const edgesCtx = edgesCanvas?.getContext("2d");
+
+    if (!staticCtx || !staticCanvas || !nodesCtx || !nodesCanvas || !edgesCtx || !edgesCanvas) return;
+
+    // Recalculate domain positions for static layer redraw
+    const cx = staticCanvas.width / 2;
+    const cy = staticCanvas.height / 2;
+    const domainKeys = Object.keys(ontologyRef.current);
+    const domainPositions: Record<DomainKey, { x: number; y: number }> = {};
+    domainKeys.forEach((domain, i) => {
+      const angle = (Math.PI * 2 * i) / domainKeys.length - Math.PI / 2;
+      const radius = Math.min(cx, cy) * 0.45;
+      domainPositions[domain] = {
+        x: cx + Math.cos(angle) * radius,
+        y: cy + Math.sin(angle) * radius,
+      };
+    });
+
+    drawStaticLayer(staticCtx, staticCanvas, domainPositions);
+    drawEdgesLayer(edgesCtx, edgesCanvas, timeRef.current);
+    drawNodesLayer(nodesCtx, nodesCanvas, timeRef.current);
+  }, [drawStaticLayer, drawEdgesLayer, drawNodesLayer]);
+
+  // Zoom handler - zoom towards cursor position
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    const newZoom = Math.min(4, Math.max(0.25, zoomRef.current * delta));
+
+    const canvas = nodesCanvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const cursorX = (e.clientX - rect.left) * 2; // Account for 2x canvas scaling
+    const cursorY = (e.clientY - rect.top) * 2;
+
+    // Adjust pan to zoom towards cursor
+    const zoomRatio = newZoom / zoomRef.current;
+    const newPanX = cursorX - (cursorX - panRef.current.x) * zoomRatio;
+    const newPanY = cursorY - (cursorY - panRef.current.y) * zoomRatio;
+
+    setZoom(newZoom);
+    setPan({ x: newPanX, y: newPanY });
+  }, []);
+
+  // Pan handlers
+  const handleMouseDown = useCallback((e: MouseEvent<HTMLCanvasElement>) => {
+    if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
+      e.preventDefault();
+      isPanningRef.current = true;
+      lastPanPosRef.current = { x: e.clientX, y: e.clientY };
+    }
+  }, []);
+
+  const handlePanMove = useCallback((e: MouseEvent<HTMLCanvasElement>) => {
+    if (!isPanningRef.current) return;
+    const dx = (e.clientX - lastPanPosRef.current.x) * 2; // Account for 2x canvas scaling
+    const dy = (e.clientY - lastPanPosRef.current.y) * 2;
+    lastPanPosRef.current = { x: e.clientX, y: e.clientY };
+    setPan(p => ({ x: p.x + dx, y: p.y + dy }));
+  }, []);
+
+  const handleMouseUp = useCallback(() => {
+    isPanningRef.current = false;
+  }, []);
+
+  // Reset zoom/pan
+  const handleResetView = useCallback(() => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  }, []);
+
+  // Redraw when zoom/pan changes
+  useEffect(() => {
+    if (containerSize.width > 0) {
+      redrawAllLayers();
+    }
+  }, [zoom, pan, containerSize, redrawAllLayers]);
 
   const canvasStyle: React.CSSProperties = {
     position: "absolute",
@@ -404,7 +539,12 @@ export function GraphCanvas({ entities, relationships, ontology, highlightedEnti
   };
 
   return (
-    <div ref={containerRef} style={{ position: "relative", width: "100%", height: "100%" }}>
+    <div
+      ref={containerRef}
+      style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+    >
       {/* Layer 1: Static (grid + domain labels) */}
       <canvas ref={staticCanvasRef} style={canvasStyle} />
       {/* Layer 2: Edges */}
@@ -413,14 +553,78 @@ export function GraphCanvas({ entities, relationships, ontology, highlightedEnti
       <canvas
         ref={nodesCanvasRef}
         onMouseMove={handleMouseMove}
+        onMouseDown={handleMouseDown}
         onClick={handleClick}
+        onWheel={handleWheel}
         style={canvasStyle}
       />
+
+      {/* Zoom controls */}
+      <div style={{
+        position: "absolute",
+        bottom: 16,
+        right: 16,
+        display: "flex",
+        flexDirection: "column",
+        gap: 4,
+        background: "rgba(15,15,20,0.8)",
+        borderRadius: 8,
+        padding: 4,
+        border: "1px solid rgba(255,255,255,0.1)",
+      }}>
+        <button
+          onClick={() => setZoom(z => Math.min(4, z * 1.2))}
+          style={{
+            width: 28, height: 28, border: "none", borderRadius: 4,
+            background: "rgba(255,255,255,0.1)", color: "#888",
+            cursor: "pointer", fontSize: 16, fontWeight: "bold",
+          }}
+          title="Zoom in"
+        >+</button>
+        <button
+          onClick={() => setZoom(z => Math.max(0.25, z / 1.2))}
+          style={{
+            width: 28, height: 28, border: "none", borderRadius: 4,
+            background: "rgba(255,255,255,0.1)", color: "#888",
+            cursor: "pointer", fontSize: 16, fontWeight: "bold",
+          }}
+          title="Zoom out"
+        >−</button>
+        <button
+          onClick={handleResetView}
+          style={{
+            width: 28, height: 28, border: "none", borderRadius: 4,
+            background: "rgba(255,255,255,0.1)", color: "#888",
+            cursor: "pointer", fontSize: 10, fontWeight: "bold",
+          }}
+          title="Reset view"
+        >⟲</button>
+      </div>
+
+      {/* Zoom indicator */}
+      {zoom !== 1 && (
+        <div style={{
+          position: "absolute",
+          bottom: 16,
+          left: 16,
+          fontSize: 11,
+          fontFamily: "'IBM Plex Mono', monospace",
+          color: "#666",
+          background: "rgba(15,15,20,0.8)",
+          padding: "4px 8px",
+          borderRadius: 4,
+        }}>
+          {Math.round(zoom * 100)}%
+        </div>
+      )}
+
+      {/* Tooltip */}
       {hovered && (() => {
         const node = nodesRef.current.find((n) => n.id === hovered);
         if (!node) return null;
-        const sx = node.x / 2;
-        const sy = node.y / 2;
+        // Transform node position to screen coordinates
+        const sx = (node.x * zoomRef.current + panRef.current.x) / 2;
+        const sy = (node.y * zoomRef.current + panRef.current.y) / 2;
         return (
           <div style={{
             position: "absolute", left: sx + 20, top: sy - 20,
