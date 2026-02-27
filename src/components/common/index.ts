@@ -7,3 +7,8 @@ export { Card } from "./Card";
 export { Badge } from "./Badge";
 export { LoadingState } from "./LoadingState";
 export { Toaster } from "./Toaster";
+export { SearchInput } from "./SearchInput";
+export { FilterBar } from "./FilterBar";
+export type { FilterItem } from "./FilterBar";
+export { MessageBubble } from "./MessageBubble";
+export type { Message } from "./MessageBubble";

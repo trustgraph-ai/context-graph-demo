@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo } from "react";
-import { SectionLabel, FilterButton, Card, LoadingState } from "../components";
+import { SectionLabel, Card, LoadingState, SearchInput, FilterBar } from "../components";
+import type { FilterItem } from "../components";
 import { useSchemas, useEmbeddings, useRowEmbeddingsQuery, useRowsQuery } from "@trustgraph/react-state";
 import { COLLECTION } from "../config";
 
@@ -53,7 +54,7 @@ export function DataView() {
 
   // Embeddings hook - we'll use refetch for manual triggering
   const [embeddingsTerm, setEmbeddingsTerm] = useState("");
-  const { embeddings, isLoading: embeddingsLoading, refetch: refetchEmbeddings } = useEmbeddings({
+  const { embeddings, isLoading: embeddingsLoading, refetch: _refetchEmbeddings } = useEmbeddings({
     flow: "default",
     term: embeddingsTerm,
   });
@@ -204,12 +205,6 @@ export function DataView() {
     performSearch(embeddings);
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      handleSearch();
-    }
-  };
-
   // Filter results for display (doesn't affect stored data)
   const displayMatches = useMemo(() => {
     if (!selectedSchema) return allMatches;
@@ -235,73 +230,38 @@ export function DataView() {
     return <LoadingState variant="error" message="Error loading schemas" />;
   }
 
+  // Build filter items from schemas
+  const filterItems: FilterItem[] = schemas.slice(0, 10).map((schema) => ({
+    key: schema.key,
+    label: schema.name,
+  }));
+
+  const filterStats = selectedSchema
+    ? `${displayMatches.length} of ${allMatches.length} results`
+    : `${allMatches.length} results`;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 110px)" }}>
       {/* Schema Filter Bar */}
-      <div style={{
-        padding: "12px 28px", display: "flex", gap: 8, alignItems: "center",
-        borderBottom: "1px solid rgba(255,255,255,0.04)",
-        flexWrap: "wrap",
-      }}>
-        <span style={{ fontSize: 11, color: "#555", fontFamily: "'IBM Plex Mono', monospace", marginRight: 8 }}>FILTER:</span>
-        <FilterButton
-          label="All"
-          isActive={!selectedSchema}
-          onClick={() => setSelectedSchema(null)}
-        />
-        {schemas.slice(0, 10).map((schema) => (
-          <FilterButton
-            key={schema.key}
-            label={schema.name}
-            isActive={selectedSchema === schema.key}
-            onClick={() => setSelectedSchema(selectedSchema === schema.key ? null : schema.key)}
-          />
-        ))}
-        <div style={{ marginLeft: "auto", fontSize: 11, color: "#444", fontFamily: "'IBM Plex Mono', monospace" }}>
-          {selectedSchema ? `${displayMatches.length} of ${allMatches.length}` : `${allMatches.length}`} results
-        </div>
-      </div>
+      <FilterBar
+        items={filterItems}
+        selectedKey={selectedSchema}
+        onSelect={setSelectedSchema}
+        stats={filterStats}
+      />
 
       {/* Search Input */}
       <div style={{ padding: "20px 28px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
         <SectionLabel marginBottom={12}>SEARCH DATA</SectionLabel>
-        <div style={{ display: "flex", gap: 8 }}>
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Search for data across tables..."
-            style={{
-              flex: 1,
-              padding: "12px 16px",
-              borderRadius: 8,
-              border: "1px solid rgba(255,255,255,0.1)",
-              background: "rgba(255,255,255,0.02)",
-              color: "#ddd",
-              fontSize: 14,
-              fontFamily: "'IBM Plex Sans', sans-serif",
-              outline: "none",
-            }}
-          />
-          <button
-            onClick={handleSearch}
-            disabled={isSearching || !searchTerm.trim()}
-            style={{
-              padding: "12px 20px",
-              borderRadius: 8,
-              border: "1px solid #93C5FD44",
-              background: isSearching || !searchTerm.trim() ? "rgba(255,255,255,0.02)" : "rgba(147,197,253,0.1)",
-              color: isSearching || !searchTerm.trim() ? "#555" : "#93C5FD",
-              cursor: isSearching || !searchTerm.trim() ? "not-allowed" : "pointer",
-              fontSize: 13,
-              fontWeight: 600,
-              fontFamily: "'IBM Plex Mono', monospace",
-            }}
-          >
-            {isSearching ? "..." : "Search"}
-          </button>
-        </div>
+        <SearchInput
+          value={searchTerm}
+          onChange={setSearchTerm}
+          onSubmit={handleSearch}
+          placeholder="Search for data across tables..."
+          buttonText="Search"
+          isLoading={isSearching}
+          buttonColor="#93C5FD"
+        />
       </div>
 
       {/* Results Area */}

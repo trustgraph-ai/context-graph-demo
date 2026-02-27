@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback, useState, MouseEvent } from "react";
 import type { DomainKey, Entity, GraphNode, OntologyType, Relationship } from "../../types";
+import { ZoomControls } from "./ZoomControls";
 
 interface GraphCanvasProps {
   entities: Entity[];
@@ -248,6 +249,12 @@ export function GraphCanvas({ entities, relationships, ontology, highlightedEnti
 
     if (!nodesCtx || !nodesCanvas || !edgesCtx || !edgesCanvas) return;
 
+    // Capture validated references for the closure
+    const validNodesCtx = nodesCtx;
+    const validNodesCanvas = nodesCanvas;
+    const validEdgesCtx = edgesCtx;
+    const validEdgesCanvas = edgesCanvas;
+
     function animate(currentTime: number) {
       // Throttle to target fps
       if (currentTime - lastFrameTimeRef.current < FRAME_INTERVAL) {
@@ -266,11 +273,11 @@ export function GraphCanvas({ entities, relationships, ontology, highlightedEnti
       const isSettled = settledRef.current;
 
       // Draw edges layer
-      drawEdgesLayer(edgesCtx, edgesCanvas, timeRef.current);
+      drawEdgesLayer(validEdgesCtx, validEdgesCanvas, timeRef.current);
 
       // Draw nodes layer
       if (!isSettled || hasHighlights || hoveredRef.current) {
-        drawNodesLayer(nodesCtx, nodesCanvas, timeRef.current);
+        drawNodesLayer(validNodesCtx, validNodesCanvas, timeRef.current);
       }
 
       // Continue animation if not settled, or if there are highlights
@@ -278,8 +285,8 @@ export function GraphCanvas({ entities, relationships, ontology, highlightedEnti
         animRef.current = requestAnimationFrame(animate);
       } else {
         // Settled with no highlights - do one final draw and stop
-        drawNodesLayer(nodesCtx, nodesCanvas, timeRef.current);
-        drawEdgesLayer(edgesCtx, edgesCanvas, timeRef.current);
+        drawNodesLayer(validNodesCtx, validNodesCanvas, timeRef.current);
+        drawEdgesLayer(validEdgesCtx, validEdgesCanvas, timeRef.current);
         animRef.current = 0;
       }
     }
@@ -505,14 +512,6 @@ export function GraphCanvas({ entities, relationships, ontology, highlightedEnti
     }
   }, []);
 
-  const handlePanMove = useCallback((e: MouseEvent<HTMLCanvasElement>) => {
-    if (!isPanningRef.current) return;
-    const dx = (e.clientX - lastPanPosRef.current.x) * 2; // Account for 2x canvas scaling
-    const dy = (e.clientY - lastPanPosRef.current.y) * 2;
-    lastPanPosRef.current = { x: e.clientX, y: e.clientY };
-    setPan(p => ({ x: p.x + dx, y: p.y + dy }));
-  }, []);
-
   const handleMouseUp = useCallback(() => {
     isPanningRef.current = false;
   }, []);
@@ -559,64 +558,12 @@ export function GraphCanvas({ entities, relationships, ontology, highlightedEnti
         style={canvasStyle}
       />
 
-      {/* Zoom controls */}
-      <div style={{
-        position: "absolute",
-        bottom: 16,
-        right: 16,
-        display: "flex",
-        flexDirection: "column",
-        gap: 4,
-        background: "rgba(15,15,20,0.8)",
-        borderRadius: 8,
-        padding: 4,
-        border: "1px solid rgba(255,255,255,0.1)",
-      }}>
-        <button
-          onClick={() => setZoom(z => Math.min(4, z * 1.2))}
-          style={{
-            width: 28, height: 28, border: "none", borderRadius: 4,
-            background: "rgba(255,255,255,0.1)", color: "#888",
-            cursor: "pointer", fontSize: 16, fontWeight: "bold",
-          }}
-          title="Zoom in"
-        >+</button>
-        <button
-          onClick={() => setZoom(z => Math.max(0.25, z / 1.2))}
-          style={{
-            width: 28, height: 28, border: "none", borderRadius: 4,
-            background: "rgba(255,255,255,0.1)", color: "#888",
-            cursor: "pointer", fontSize: 16, fontWeight: "bold",
-          }}
-          title="Zoom out"
-        >−</button>
-        <button
-          onClick={handleResetView}
-          style={{
-            width: 28, height: 28, border: "none", borderRadius: 4,
-            background: "rgba(255,255,255,0.1)", color: "#888",
-            cursor: "pointer", fontSize: 10, fontWeight: "bold",
-          }}
-          title="Reset view"
-        >⟲</button>
-      </div>
-
-      {/* Zoom indicator */}
-      {zoom !== 1 && (
-        <div style={{
-          position: "absolute",
-          bottom: 16,
-          left: 16,
-          fontSize: 11,
-          fontFamily: "'IBM Plex Mono', monospace",
-          color: "#666",
-          background: "rgba(15,15,20,0.8)",
-          padding: "4px 8px",
-          borderRadius: 4,
-        }}>
-          {Math.round(zoom * 100)}%
-        </div>
-      )}
+      <ZoomControls
+        zoom={zoom}
+        onZoomIn={() => setZoom(z => Math.min(4, z * 1.2))}
+        onZoomOut={() => setZoom(z => Math.max(0.25, z / 1.2))}
+        onReset={handleResetView}
+      />
 
       {/* Tooltip */}
       {hovered && (() => {

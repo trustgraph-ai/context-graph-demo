@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import type { DomainKey, Entity, GraphNode, OntologyType, Relationship } from "../../types";
+import { ZoomControls } from "./ZoomControls";
 
 interface GraphCanvasSVGProps {
   entities: Entity[];
@@ -153,7 +154,7 @@ export function GraphCanvasSVG({ entities, relationships, ontology, highlightedE
 
   // Generate grid lines
   const gridLines = useMemo(() => {
-    const lines: JSX.Element[] = [];
+    const lines: React.ReactElement[] = [];
     const { width, height } = containerSize;
     if (width === 0) return lines;
 
@@ -419,64 +420,12 @@ export function GraphCanvasSVG({ entities, relationships, ontology, highlightedE
         </g>{/* Close transform group */}
       </svg>
 
-      {/* Zoom controls */}
-      <div style={{
-        position: "absolute",
-        bottom: 16,
-        right: 16,
-        display: "flex",
-        flexDirection: "column",
-        gap: 4,
-        background: "rgba(15,15,20,0.8)",
-        borderRadius: 8,
-        padding: 4,
-        border: "1px solid rgba(255,255,255,0.1)",
-      }}>
-        <button
-          onClick={() => setZoom(z => Math.min(4, z * 1.2))}
-          style={{
-            width: 28, height: 28, border: "none", borderRadius: 4,
-            background: "rgba(255,255,255,0.1)", color: "#888",
-            cursor: "pointer", fontSize: 16, fontWeight: "bold",
-          }}
-          title="Zoom in"
-        >+</button>
-        <button
-          onClick={() => setZoom(z => Math.max(0.25, z / 1.2))}
-          style={{
-            width: 28, height: 28, border: "none", borderRadius: 4,
-            background: "rgba(255,255,255,0.1)", color: "#888",
-            cursor: "pointer", fontSize: 16, fontWeight: "bold",
-          }}
-          title="Zoom out"
-        >−</button>
-        <button
-          onClick={handleResetView}
-          style={{
-            width: 28, height: 28, border: "none", borderRadius: 4,
-            background: "rgba(255,255,255,0.1)", color: "#888",
-            cursor: "pointer", fontSize: 10, fontWeight: "bold",
-          }}
-          title="Reset view"
-        >⟲</button>
-      </div>
-
-      {/* Zoom indicator */}
-      {zoom !== 1 && (
-        <div style={{
-          position: "absolute",
-          bottom: 16,
-          left: 16,
-          fontSize: 11,
-          fontFamily: "'IBM Plex Mono', monospace",
-          color: "#666",
-          background: "rgba(15,15,20,0.8)",
-          padding: "4px 8px",
-          borderRadius: 4,
-        }}>
-          {Math.round(zoom * 100)}%
-        </div>
-      )}
+      <ZoomControls
+        zoom={zoom}
+        onZoomIn={() => setZoom(z => Math.min(4, z * 1.2))}
+        onZoomOut={() => setZoom(z => Math.max(0.25, z / 1.2))}
+        onReset={handleResetView}
+      />
 
       {/* Tooltip */}
       {hovered && (() => {

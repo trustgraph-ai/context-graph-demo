@@ -1,14 +1,7 @@
 import type { DomainKey, OntologyDomain } from "../types";
 import { SectionLabel, Card, Badge, LoadingState } from "../components";
 import { useGraphData, useOntologySchema } from "../state";
-
-// Helper to get local name from URI
-function getLocalName(uri: string): string {
-  const hashIndex = uri.lastIndexOf("#");
-  const slashIndex = uri.lastIndexOf("/");
-  const index = Math.max(hashIndex, slashIndex);
-  return index >= 0 ? uri.substring(index + 1) : uri;
-}
+import { getLocalName } from "../utils";
 
 export function OntologyView() {
   const { ontology, isLoading: graphLoading } = useGraphData();

@@ -1,5 +1,6 @@
 import type { DomainKey, Entity, OntologyDomain } from "../types";
-import { GraphCanvasSVG as GraphCanvas, NodeDetailPanel, FilterButton, LoadingState } from "../components";
+import { GraphCanvasSVG as GraphCanvas, NodeDetailPanel, LoadingState, FilterBar } from "../components";
+import type { FilterItem } from "../components";
 import { useGraphData } from "../state";
 
 interface GraphViewProps {
@@ -39,42 +40,29 @@ export function GraphView({ activeFilter, onFilterChange, selectedNode, onNodeSe
     return <LoadingState variant="error" message="Error loading graph data" />;
   }
 
+  // Build filter items from relevant domains
+  const filterItems: FilterItem[] = selectedNode
+    ? (Object.entries(ontology) as [DomainKey, OntologyDomain][])
+        .filter(([key]) => relevantDomains?.has(key))
+        .slice(0, 10)
+        .map(([key, data]) => ({
+          key,
+          label: data.label,
+          icon: data.icon,
+          color: data.color,
+        }))
+    : [];
+
   return (
     <>
       {/* Domain Filter Bar */}
-      <div style={{
-        padding: "12px 28px", display: "flex", gap: 8, alignItems: "center",
-        borderBottom: "1px solid rgba(255,255,255,0.04)",
-      }}>
-        <span style={{ fontSize: 11, color: "#555", fontFamily: "'IBM Plex Mono', monospace", marginRight: 8 }}>FILTER:</span>
-        {selectedNode ? (
-          <>
-            <FilterButton
-              label="All"
-              isActive={!activeFilter}
-              onClick={() => onFilterChange(null)}
-            />
-            {(Object.entries(ontology) as [DomainKey, OntologyDomain][])
-              .filter(([key]) => relevantDomains?.has(key))
-              .slice(0, 10)
-              .map(([key, data]) => (
-                <FilterButton
-                  key={key}
-                  label={data.label}
-                  icon={data.icon}
-                  color={data.color}
-                  isActive={activeFilter === key}
-                  onClick={() => onFilterChange(activeFilter === key ? null : key)}
-                />
-              ))}
-          </>
-        ) : (
-          <span style={{ fontSize: 11, color: "#555", fontStyle: "italic" }}>Select a node to filter</span>
-        )}
-        <div style={{ marginLeft: "auto", fontSize: 11, color: "#444", fontFamily: "'IBM Plex Mono', monospace" }}>
-          {entities.length} entities · {relationships.length} relationships
-        </div>
-      </div>
+      <FilterBar
+        items={filterItems}
+        selectedKey={activeFilter}
+        onSelect={(key) => onFilterChange(key as DomainKey | null)}
+        stats={`${entities.length} entities · ${relationships.length} relationships`}
+        emptyMessage={selectedNode ? undefined : "Select a node to filter"}
+      />
 
       {/* Main Content */}
       <div style={{ display: "flex", height: "calc(100vh - 150px)" }}>
