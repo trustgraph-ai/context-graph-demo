@@ -1,5 +1,5 @@
 import type { DomainKey, Entity, OntologyDomain } from "../types";
-import { GraphCanvas, NodeDetailPanel, FilterButton, LoadingState } from "../components";
+import { GraphCanvasSVG as GraphCanvas, NodeDetailPanel, FilterButton, LoadingState } from "../components";
 import { useGraphData } from "../state";
 
 interface GraphViewProps {
