@@ -39,6 +39,7 @@ interface AccumulatedMatch {
 export function DataView() {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeSearchTerm, setActiveSearchTerm] = useState<string | null>(null);
+  const [searchTrigger, setSearchTrigger] = useState(0); // Increments to force re-search
   const [selectedSchema, setSelectedSchema] = useState<string | null>(null);
   const [allMatches, setAllMatches] = useState<AccumulatedMatch[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -118,6 +119,7 @@ export function DataView() {
     setIsSearching(true);
     setAllMatches([]);
     lastSearchedRef.current = null; // Reset so we can search again
+    setSearchTrigger(t => t + 1); // Force effect to re-run even if same term
     setActiveSearchTerm(term);
   }, [searchTerm]);
 
@@ -233,7 +235,7 @@ export function DataView() {
     };
 
     performSearch();
-  }, [activeSearchTerm, embeddings, embeddingsLoading, selectedSchema]);
+  }, [activeSearchTerm, searchTrigger, embeddings, embeddingsLoading, selectedSchema]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
