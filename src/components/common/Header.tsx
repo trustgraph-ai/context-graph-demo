@@ -28,10 +28,11 @@ export function Header({ activeTab, onTabChange }: HeaderProps) {
         </div>
       </div>
       <div style={{ display: "flex", gap: 6, fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }}>
-        {(["graph", "query", "data", "ontology"] as const).map((tab) => {
+        {(["graph", "query", "explain", "data", "ontology"] as const).map((tab) => {
           const labels: Record<typeof tab, string> = {
             graph: "◈ Context Graph",
             query: "⚡ Agent Query",
+            explain: "◉ Explain",
             data: "▤ Table Explorer",
             ontology: "◇ Ontology",
           };
