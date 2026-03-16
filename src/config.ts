@@ -1,2 +1,2 @@
 // TrustGraph collection identifier
-export const COLLECTION = "coffee";
+export const COLLECTION = "default";
