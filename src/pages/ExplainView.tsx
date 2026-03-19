@@ -742,31 +742,29 @@ export function ExplainView() {
     return { graphNodes: Array.from(nodeMap.values()), graphEdges: edgeList };
   }, [explainNodes]);
 
-  // ── Card click → highlight on graph ───────────────────────────────
-  const handleCardClick = useCallback((node: ExplainNode) => {
-    if (!node.fetched || !node.data) return;
-
-    if (node.eventType === "exploration") {
-      const d = node.data as ExplorationData;
-      setHighlightedNodeIds(d.entities);
-      setHighlightedEdgeIds([]);
-    } else if (node.eventType === "focus") {
-      const d = node.data as FocusData;
-      const nodeIds = new Set<string>();
-      const edgeIds: string[] = [];
-      for (const sel of d.edgeSelections) {
-        edgeIds.push(sel.edgeUri);
-        if (sel.edge) {
-          nodeIds.add(sel.edge.s);
-          nodeIds.add(sel.edge.o);
-        }
-      }
-      setHighlightedNodeIds(Array.from(nodeIds));
-      setHighlightedEdgeIds(edgeIds);
-    } else {
-      setHighlightedNodeIds([]);
-      setHighlightedEdgeIds([]);
+  // ── Entity/edge click → neighbourhood highlight on graph ─────────
+  const handleEntityClick = useCallback((entityUri: string) => {
+    // Highlight this node + connected edges + neighbour nodes
+    const connectedEdges = graphEdges.filter(e => e.from === entityUri || e.to === entityUri);
+    const neighbourIds = new Set<string>([entityUri]);
+    const edgeIds: string[] = [];
+    for (const e of connectedEdges) {
+      edgeIds.push(e.id);
+      neighbourIds.add(e.from);
+      neighbourIds.add(e.to);
     }
+    setHighlightedNodeIds(Array.from(neighbourIds));
+    setHighlightedEdgeIds(edgeIds);
+  }, [graphEdges]);
+
+  const handleEdgeClick = useCallback((sel: EdgeSelection) => {
+    // Highlight this edge + its two endpoint nodes
+    const nodeIds: string[] = [];
+    if (sel.edge) {
+      nodeIds.push(sel.edge.s, sel.edge.o);
+    }
+    setHighlightedNodeIds(nodeIds);
+    setHighlightedEdgeIds([sel.edgeUri]);
   }, []);
 
   return (
@@ -939,7 +937,8 @@ export function ExplainView() {
                   key={node.explainId}
                   node={node}
                   index={idx}
-                  onClick={() => handleCardClick(node)}
+                  onEntityClick={handleEntityClick}
+                  onEdgeClick={handleEdgeClick}
                 />
               ))}
             </div>
@@ -953,16 +952,17 @@ export function ExplainView() {
 
 // ── ExplainCard ─────────────────────────────────────────────────────
 
-function ExplainCard({ node, index, onClick }: { node: ExplainNode; index: number; onClick?: () => void }) {
+function ExplainCard({ node, index, onEntityClick, onEdgeClick }: {
+  node: ExplainNode;
+  index: number;
+  onEntityClick?: (uri: string) => void;
+  onEdgeClick?: (sel: EdgeSelection) => void;
+}) {
   const typeColor = eventTypeColor(node.eventType);
-  const clickable = node.eventType === "exploration" || node.eventType === "focus";
 
   return (
-    <div
-      onClick={clickable ? onClick : undefined}
-      style={{
+    <div style={{
       padding: "12px 16px", borderRadius: 8,
-      cursor: clickable ? "pointer" : "default",
       background: withGlow(typeColor, 0.06),
       border: `1px solid ${withGlow(typeColor, 0.15)}`,
     }}>
@@ -987,7 +987,14 @@ function ExplainCard({ node, index, onClick }: { node: ExplainNode; index: numbe
       </div>
 
       {/* Event data */}
-      {node.fetched && node.data && <EventDataView eventType={node.eventType} data={node.data} />}
+      {node.fetched && node.data && (
+        <EventDataView
+          eventType={node.eventType}
+          data={node.data}
+          onEntityClick={onEntityClick}
+          onEdgeClick={onEdgeClick}
+        />
+      )}
 
       {node.error && (
         <div style={{ fontSize: 10, color: semantic.error, marginTop: 4 }}>{node.error}</div>
@@ -998,7 +1005,12 @@ function ExplainCard({ node, index, onClick }: { node: ExplainNode; index: numbe
 
 // ── EventDataView ───────────────────────────────────────────────────
 
-function EventDataView({ eventType, data }: { eventType: string; data: EventData }) {
+function EventDataView({ eventType, data, onEntityClick, onEdgeClick }: {
+  eventType: string;
+  data: EventData;
+  onEntityClick?: (uri: string) => void;
+  onEdgeClick?: (sel: EdgeSelection) => void;
+}) {
   const mono = { fontFamily: "'IBM Plex Mono', monospace" } as const;
 
   switch (eventType) {
@@ -1068,12 +1080,20 @@ function EventDataView({ eventType, data }: { eventType: string; data: EventData
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                 {d.entityLabels.map((label, i) => (
-                  <span key={i} style={{
-                    fontSize: 11, padding: "3px 8px", borderRadius: 4,
-                    background: withGlow(palette.blue, 0.1),
-                    border: `1px solid ${withGlow(palette.blue, 0.2)}`,
-                    color: text.secondary, ...mono,
-                  }}>
+                  <span
+                    key={i}
+                    onClick={() => onEntityClick?.(d.entities[i])}
+                    style={{
+                      fontSize: 11, padding: "3px 8px", borderRadius: 4,
+                      background: withGlow(palette.blue, 0.1),
+                      border: `1px solid ${withGlow(palette.blue, 0.2)}`,
+                      color: text.secondary, ...mono,
+                      cursor: onEntityClick ? "pointer" : "default",
+                      transition: "all 0.15s ease",
+                    }}
+                    onMouseEnter={e => { if (onEntityClick) (e.currentTarget.style.background = withGlow(palette.blue, 0.25)); }}
+                    onMouseLeave={e => { (e.currentTarget.style.background = withGlow(palette.blue, 0.1)); }}
+                  >
                     {label}
                   </span>
                 ))}
@@ -1094,7 +1114,7 @@ function EventDataView({ eventType, data }: { eventType: string; data: EventData
                 Focused on {d.edgeSelections.length} edge{d.edgeSelections.length !== 1 ? "s" : ""}
               </div>
               {d.edgeSelections.map((sel, i) => (
-                <EdgeSelectionView key={sel.edgeUri || i} sel={sel} />
+                <EdgeSelectionView key={sel.edgeUri || i} sel={sel} onClick={() => onEdgeClick?.(sel)} />
               ))}
             </>
           )}
@@ -1175,14 +1195,21 @@ function EventDataView({ eventType, data }: { eventType: string; data: EventData
 
 // ── EdgeSelectionView ───────────────────────────────────────────────
 
-function EdgeSelectionView({ sel }: { sel: EdgeSelection }) {
+function EdgeSelectionView({ sel, onClick }: { sel: EdgeSelection; onClick?: () => void }) {
   const mono = { fontFamily: "'IBM Plex Mono', monospace" } as const;
 
   return (
-    <div style={{
-      padding: "6px 10px", marginBottom: 4, borderRadius: 6,
-      borderLeft: `3px solid ${withGlow(palette.purple, 0.3)}`,
-    }}>
+    <div
+      onClick={onClick}
+      style={{
+        padding: "6px 10px", marginBottom: 4, borderRadius: 6,
+        borderLeft: `3px solid ${withGlow(palette.purple, 0.3)}`,
+        cursor: onClick ? "pointer" : "default",
+        transition: "background 0.15s ease",
+      }}
+      onMouseEnter={e => { if (onClick) e.currentTarget.style.background = withGlow(palette.purple, 0.08); }}
+      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+    >
       {/* Edge triple + source on one line */}
       {sel.edgeLabels && (
         <div style={{ fontSize: 11, lineHeight: 1.5, ...mono }}>
