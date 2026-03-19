@@ -196,25 +196,43 @@ async function queryTriples(
   return api.triplesQuery(s, p, undefined, limit, collection, graph);
 }
 
-// Simple retry: keep trying until we get a non-empty result.
-async function queryTriplesSimpleRetry(
+// Backoff retry for eventually-consistent event triples.
+// Calls onUpdate each time new triples arrive, settles when two consecutive
+// fetches return the same count, or after maxTries (6 = 1 initial + 5 retries).
+// Backoff: 50ms × 3 each retry, capped at 1500ms.
+async function queryTriplesUntilSettled(
   api: ReturnType<BaseApi["flow"]>,
   subject: string,
-  predicate?: string,
+  onUpdate: (triples: Triple[]) => void,
   limit = 100,
   collection = COLLECTION,
   graph?: string,
-  maxRetries = 5,
-  retryDelay = 200,
+  maxTries = 6,
 ): Promise<Triple[]> {
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    const triples = await queryTriples(api, subject, predicate, limit, collection, graph);
-    if (triples.length > 0) return triples;
-    if (attempt < maxRetries - 1) {
-      await new Promise(r => setTimeout(r, retryDelay));
+  let prevCount = -1;
+  let settled: Triple[] = [];
+  let delay = 50;
+
+  for (let attempt = 0; attempt < maxTries; attempt++) {
+    const triples = await queryTriples(api, subject, undefined, limit, collection, graph);
+
+    if (triples.length !== prevCount) {
+      settled = triples;
+      onUpdate(triples);
+    } else {
+      // Two consecutive identical counts — settled
+      return settled;
+    }
+
+    prevCount = triples.length;
+
+    if (attempt < maxTries - 1) {
+      await new Promise(r => setTimeout(r, delay));
+      delay = Math.min(delay * 3, 1500);
     }
   }
-  return [];
+
+  return settled;
 }
 
 // Resolve rdfs:label for a URI, with cache
@@ -444,7 +462,7 @@ async function enrichEventData(
     case "focus": {
       const basic = basicData as FocusData;
       const edgeSelections = await Promise.all(basic.edgeSelections.map(async (basicSel) => {
-        const edgeTriples = await queryTriplesSimpleRetry(
+        const edgeTriples = await queryTriples(
           api, basicSel.edgeUri, undefined, 100, COLLECTION, explainGraph,
         );
 
@@ -533,34 +551,30 @@ export function ExplainView() {
         ));
       };
 
-      // Fetch triples, retrying until non-empty
-      let triples = await queryTriplesSimpleRetry(
-        api, node.explainId, undefined, 100, COLLECTION, node.explainGraph,
-        10, 500,
+      // Phase 1: Fetch event triples with backoff until settled.
+      // These are eventually consistent — render progressively as they arrive.
+      let latestEventType = "unknown";
+      let latestBasicData: EventData = {};
+
+      const settledTriples = await queryTriplesUntilSettled(
+        api, node.explainId,
+        (triples) => {
+          latestEventType = getEventTypeFromTriples(triples);
+          latestBasicData = parseBasicEventData(latestEventType, triples);
+          updateNode({ eventType: latestEventType, data: latestBasicData, fetched: true, fetching: false });
+        },
+        100, COLLECTION, node.explainGraph,
       );
 
-      // Determine event type from rdf:type triples
-      let eventType = getEventTypeFromTriples(triples);
-
-      // Show basic data immediately
-      let basicData = parseBasicEventData(eventType, triples);
-      updateNode({ eventType, data: basicData, fetched: true, fetching: false });
-
-      // Re-fetch after a delay to catch late-arriving triples
-      await new Promise(r => setTimeout(r, 1000));
-      const retryTriples = await queryTriples(
-        api, node.explainId, undefined, 100, COLLECTION, node.explainGraph,
-      );
-      if (retryTriples.length > triples.length) {
-        triples = retryTriples;
-        eventType = getEventTypeFromTriples(triples);
-        basicData = parseBasicEventData(eventType, triples);
-        updateNode({ eventType, data: basicData });
+      if (settledTriples.length === 0) {
+        updateNode({ fetched: true, fetching: false });
+        return;
       }
 
-      // Then enrich with labels, edge details, provenance (non-blocking)
-      const enriched = await enrichEventData(api, eventType, triples, basicData, labelCacheRef.current, node.explainGraph);
-      if (enriched !== basicData) {
+      // Phase 2: Enrich with KG lookups (labels, edge details, provenance).
+      // These reference known-to-exist data — no retry needed, just fetch once.
+      const enriched = await enrichEventData(api, latestEventType, settledTriples, latestBasicData, labelCacheRef.current, node.explainGraph);
+      if (enriched !== latestBasicData) {
         updateNode({ data: enriched });
       }
     } catch (err) {
