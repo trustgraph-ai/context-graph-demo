@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import { SectionLabel, SearchInput } from "../components";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { SectionLabel, SearchInput, ExplainGraph } from "../components";
+import type { ExplainGraphNode, ExplainGraphEdge } from "../components";
 import { COLLECTION } from "../config";
 import { useInference } from "@trustgraph/react-state";
 import type { ExplainEvent, Triple, Term } from "@trustgraph/react-state";
@@ -515,6 +516,8 @@ export function ExplainView() {
   const [isQuerying, setIsQuerying] = useState(false);
   const [explainNodes, setExplainNodes] = useState<ExplainNode[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [highlightedNodeIds, setHighlightedNodeIds] = useState<string[]>([]);
+  const [highlightedEdgeIds, setHighlightedEdgeIds] = useState<string[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const explainScrollRef = useRef<HTMLDivElement>(null);
   const labelCacheRef = useRef(new Map<string, string>());
@@ -614,6 +617,8 @@ export function ExplainView() {
     setResponse("");
     setAgentMessages([]);
     setExplainNodes([]);
+    setHighlightedNodeIds([]);
+    setHighlightedEdgeIds([]);
     setError(null);
     setInput("");
     labelCacheRef.current.clear();
@@ -691,6 +696,78 @@ export function ExplainView() {
       setIsQuerying(false);
     }
   }, [graphRag, documentRag, agent, queryMode, isQuerying, addExplainEvent]);
+
+  // ── Derive graph nodes and edges from explain events ──────────────
+  const { graphNodes, graphEdges } = useMemo(() => {
+    const nodeMap = new Map<string, ExplainGraphNode>();
+    const edgeList: ExplainGraphEdge[] = [];
+
+    for (const node of explainNodes) {
+      if (!node.fetched || !node.data) continue;
+
+      if (node.eventType === "exploration") {
+        const d = node.data as ExplorationData;
+        const labels = d.entityLabels || [];
+        d.entities.forEach((uri, i) => {
+          if (!nodeMap.has(uri)) {
+            nodeMap.set(uri, { id: uri, label: labels[i] || shortUri(uri), color: palette.blue });
+          }
+        });
+      }
+
+      if (node.eventType === "focus") {
+        const d = node.data as FocusData;
+        for (const sel of d.edgeSelections) {
+          if (!sel.edge) continue;
+          const { s, p, o } = sel.edge;
+          const sLabel = sel.edgeLabels?.s || shortUri(s);
+          const pLabel = sel.edgeLabels?.p || shortUri(p);
+          const oLabel = sel.edgeLabels?.o || shortUri(o);
+
+          // Ensure nodes exist
+          if (!nodeMap.has(s)) nodeMap.set(s, { id: s, label: sLabel, color: palette.pink });
+          if (!nodeMap.has(o)) nodeMap.set(o, { id: o, label: oLabel, color: palette.pink });
+
+          edgeList.push({
+            id: sel.edgeUri,
+            from: s,
+            to: o,
+            label: pLabel,
+            reasoning: sel.reasoning,
+          });
+        }
+      }
+    }
+
+    return { graphNodes: Array.from(nodeMap.values()), graphEdges: edgeList };
+  }, [explainNodes]);
+
+  // ── Card click → highlight on graph ───────────────────────────────
+  const handleCardClick = useCallback((node: ExplainNode) => {
+    if (!node.fetched || !node.data) return;
+
+    if (node.eventType === "exploration") {
+      const d = node.data as ExplorationData;
+      setHighlightedNodeIds(d.entities);
+      setHighlightedEdgeIds([]);
+    } else if (node.eventType === "focus") {
+      const d = node.data as FocusData;
+      const nodeIds = new Set<string>();
+      const edgeIds: string[] = [];
+      for (const sel of d.edgeSelections) {
+        edgeIds.push(sel.edgeUri);
+        if (sel.edge) {
+          nodeIds.add(sel.edge.s);
+          nodeIds.add(sel.edge.o);
+        }
+      }
+      setHighlightedNodeIds(Array.from(nodeIds));
+      setHighlightedEdgeIds(edgeIds);
+    } else {
+      setHighlightedNodeIds([]);
+      setHighlightedEdgeIds([]);
+    }
+  }, []);
 
   return (
     <div style={{ display: "flex", height: "calc(100vh - 110px)" }}>
@@ -808,38 +885,66 @@ export function ExplainView() {
         </div>
       </div>
 
-      {/* RHS: Explainability panel */}
+      {/* RHS: Graph + Explainability panel */}
       <div style={{ width: "45%", display: "flex", flexDirection: "column" }}>
-        <div style={{ padding: "20px 28px", borderBottom: `1px solid ${border.default}` }}>
-          <SectionLabel>
-            EXPLAINABILITY
-            {explainNodes.length > 0 && (
-              <span style={{ color: text.muted, fontWeight: 400, marginLeft: 8 }}>
-                {explainNodes.length} event{explainNodes.length !== 1 ? "s" : ""}
-              </span>
-            )}
-          </SectionLabel>
+        {/* Graph view — top half */}
+        <div style={{ height: "45%", borderBottom: `1px solid ${border.default}`, position: "relative" }}>
+          <ExplainGraph
+            nodes={graphNodes}
+            edges={graphEdges}
+            highlightedNodeIds={highlightedNodeIds}
+            highlightedEdgeIds={highlightedEdgeIds}
+            onNodeClick={(nodeId) => {
+              setHighlightedNodeIds(prev =>
+                prev.includes(nodeId) ? prev.filter(id => id !== nodeId) : [...prev, nodeId]
+              );
+            }}
+            onEdgeClick={(edgeId) => {
+              setHighlightedEdgeIds(prev =>
+                prev.includes(edgeId) ? prev.filter(id => id !== edgeId) : [...prev, edgeId]
+              );
+            }}
+          />
         </div>
 
-        <div style={{ flex: 1, padding: "16px 20px", overflowY: "auto" }}>
-          {explainNodes.length === 0 && !isQuerying && (
-            <div style={{ color: text.hint, fontSize: 13, fontStyle: "italic" }}>
-              Explain events will appear here as the query progresses.
-            </div>
-          )}
-
-          {isQuerying && explainNodes.length === 0 && (
-            <div style={{ padding: "8px 12px", fontSize: 11, color: withGlow(palette.cyan, 0.6), fontFamily: "'IBM Plex Mono', monospace" }}>
-              Waiting for explain events...
-            </div>
-          )}
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {explainNodes.map((node, idx) => (
-              <ExplainCard key={node.explainId} node={node} index={idx} />
-            ))}
+        {/* Event cards — bottom half */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+          <div style={{ padding: "12px 20px", borderBottom: `1px solid ${border.default}` }}>
+            <SectionLabel>
+              EVENTS
+              {explainNodes.length > 0 && (
+                <span style={{ color: text.muted, fontWeight: 400, marginLeft: 8 }}>
+                  {explainNodes.length} event{explainNodes.length !== 1 ? "s" : ""}
+                </span>
+              )}
+            </SectionLabel>
           </div>
-          <div ref={explainScrollRef} />
+
+          <div style={{ flex: 1, padding: "12px 16px", overflowY: "auto" }}>
+            {explainNodes.length === 0 && !isQuerying && (
+              <div style={{ color: text.hint, fontSize: 13, fontStyle: "italic" }}>
+                Explain events will appear here as the query progresses.
+              </div>
+            )}
+
+            {isQuerying && explainNodes.length === 0 && (
+              <div style={{ padding: "8px 12px", fontSize: 11, color: withGlow(palette.cyan, 0.6), fontFamily: "'IBM Plex Mono', monospace" }}>
+                Waiting for explain events...
+              </div>
+            )}
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {explainNodes.map((node, idx) => (
+                <ExplainCard
+                  key={node.explainId}
+                  node={node}
+                  index={idx}
+                  onClick={() => handleCardClick(node)}
+                />
+              ))}
+            </div>
+            <div ref={explainScrollRef} />
+          </div>
         </div>
       </div>
     </div>
@@ -848,12 +953,16 @@ export function ExplainView() {
 
 // ── ExplainCard ─────────────────────────────────────────────────────
 
-function ExplainCard({ node, index }: { node: ExplainNode; index: number }) {
+function ExplainCard({ node, index, onClick }: { node: ExplainNode; index: number; onClick?: () => void }) {
   const typeColor = eventTypeColor(node.eventType);
+  const clickable = node.eventType === "exploration" || node.eventType === "focus";
 
   return (
-    <div style={{
+    <div
+      onClick={clickable ? onClick : undefined}
+      style={{
       padding: "12px 16px", borderRadius: 8,
+      cursor: clickable ? "pointer" : "default",
       background: withGlow(typeColor, 0.06),
       border: `1px solid ${withGlow(typeColor, 0.15)}`,
     }}>
