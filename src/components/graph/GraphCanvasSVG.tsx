@@ -307,7 +307,7 @@ export function GraphCanvasSVG({ entities, relationships, ontology, highlightedE
 
         {/* Edges */}
         <g>
-          {filteredRels.map((rel) => {
+          {filteredRels.map((rel, i) => {
             const fromNode = nodes.find((n) => n.id === rel.from);
             const toNode = nodes.find((n) => n.id === rel.to);
             if (!fromNode || !toNode) return null;
@@ -328,16 +328,16 @@ export function GraphCanvasSVG({ entities, relationships, ontology, highlightedE
             const py = (1 - t) * (1 - t) * y1 + 2 * (1 - t) * t * my + t * t * y2;
 
             return (
-              <g key={`${rel.from}-${rel.to}`}>
+              <g key={`${rel.from}-${rel.predicate}-${rel.to}-${i}`}>
                 <defs>
-                  <linearGradient id={`grad-${rel.from}-${rel.to}`} x1="0%" y1="0%" x2="100%" y2="0%">
+                  <linearGradient id={`grad-${rel.from}-${rel.to}-${i}`} x1="0%" y1="0%" x2="100%" y2="0%">
                     <stop offset="0%" stopColor={fromNode.color} stopOpacity={alpha} />
                     <stop offset="100%" stopColor={toNode.color} stopOpacity={alpha} />
                   </linearGradient>
                 </defs>
                 <path
                   d={path}
-                  stroke={`url(#grad-${rel.from}-${rel.to})`}
+                  stroke={`url(#grad-${rel.from}-${rel.to}-${i})`}
                   strokeWidth={isHighlighted ? 1.5 : 0.75}
                   fill="none"
                 />
