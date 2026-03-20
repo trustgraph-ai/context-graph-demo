@@ -949,34 +949,11 @@ export function ExplainView() {
 
           <div ref={scrollRef} />
         </div>
-      </div>
-
-      {/* RHS: Graph + Explainability panel */}
-      <div style={{ width: "45%", display: "flex", flexDirection: "column" }}>
-        {/* Graph view — top half */}
-        <div style={{ height: "45%", borderBottom: `1px solid ${border.default}`, position: "relative" }}>
-          <ExplainGraph
-            nodes={graphNodes}
-            edges={graphEdges}
-            highlightedNodeIds={highlightedNodeIds}
-            highlightedEdgeIds={highlightedEdgeIds}
-            onNodeClick={(nodeId) => {
-              setHighlightedNodeIds(prev =>
-                prev.includes(nodeId) ? prev.filter(id => id !== nodeId) : [...prev, nodeId]
-              );
-            }}
-            onEdgeClick={(edgeId) => {
-              setHighlightedEdgeIds(prev =>
-                prev.includes(edgeId) ? prev.filter(id => id !== edgeId) : [...prev, edgeId]
-              );
-            }}
-          />
-        </div>
 
         {/* Source text panel — shown when a provenance link is clicked */}
         {sourcePanel && (
           <div style={{
-            maxHeight: "35%", borderBottom: `1px solid ${border.default}`,
+            maxHeight: "40%", borderTop: `1px solid ${border.default}`,
             display: "flex", flexDirection: "column",
             background: withGlow(palette.amber, 0.03),
           }}>
@@ -1047,6 +1024,29 @@ export function ExplainView() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* RHS: Graph + Explainability panel */}
+      <div style={{ width: "45%", display: "flex", flexDirection: "column" }}>
+        {/* Graph view — top half */}
+        <div style={{ height: "45%", borderBottom: `1px solid ${border.default}`, position: "relative" }}>
+          <ExplainGraph
+            nodes={graphNodes}
+            edges={graphEdges}
+            highlightedNodeIds={highlightedNodeIds}
+            highlightedEdgeIds={highlightedEdgeIds}
+            onNodeClick={(nodeId) => {
+              setHighlightedNodeIds(prev =>
+                prev.includes(nodeId) ? prev.filter(id => id !== nodeId) : [...prev, nodeId]
+              );
+            }}
+            onEdgeClick={(edgeId) => {
+              setHighlightedEdgeIds(prev =>
+                prev.includes(edgeId) ? prev.filter(id => id !== edgeId) : [...prev, edgeId]
+              );
+            }}
+          />
+        </div>
 
         {/* Event cards — bottom half */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
