@@ -25,6 +25,8 @@ const TG_ARGUMENTS = TG + "arguments";
 const TG_THOUGHT = TG + "thought";
 const TG_OBSERVATION = TG + "observation";
 const TG_DOCUMENT = TG + "document";
+const TG_CHAR_OFFSET = TG + "charOffset";
+const TG_CHAR_LENGTH = TG + "charLength";
 const RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
 const PROV = "http://www.w3.org/ns/prov#";
 const PROV_STARTED_AT_TIME = PROV + "startedAtTime";
@@ -88,9 +90,11 @@ interface ReflectionData {
 type EventData = QuestionData | GroundingData | ExplorationData | FocusData | SynthesisData | AnalysisData | ConclusionData | ReflectionData;
 
 interface SourcePanelState {
+  chunkUri: string;
   documentUri: string;
-  title?: string;
-  text: string;
+  documentTitle?: string;
+  documentTags?: string[];
+  chunkText?: string;
   loading: boolean;
   error?: string;
 }
@@ -777,58 +781,96 @@ export function ExplainView() {
     setHighlightedEdgeIds([sel.edgeUri]);
   }, []);
 
-  const handleSourceClick = useCallback((documentUri: string) => {
-    // If already showing this document, close it
-    if (sourcePanel?.documentUri === documentUri) {
+  const handleSourceClick = useCallback((source: ProvenanceChain) => {
+    // chain[0] = chunk (closest to edge), chain[last] = root document
+    const chunkNode = source.chain[0];
+    const docNode = source.chain[source.chain.length - 1];
+    if (!chunkNode || !docNode) return;
+
+    // Toggle off if clicking same chunk
+    if (sourcePanel?.chunkUri === chunkNode.uri) {
       setSourcePanel(null);
       return;
     }
 
-    setSourcePanel({ documentUri, text: "", loading: true });
+    setSourcePanel({
+      chunkUri: chunkNode.uri,
+      documentUri: docNode.uri,
+      loading: true,
+    });
 
+    const api = socket.flow("default");
     const librarian = socket.librarian();
 
-    // Fetch metadata and stream document content in parallel
-    librarian.getDocumentMetadata(documentUri).then(meta => {
-      setSourcePanel(prev => prev?.documentUri === documentUri
-        ? { ...prev, title: meta?.title || shortUri(documentUri) }
+    // Fetch document metadata from librarian
+    librarian.getDocumentMetadata(docNode.uri).then(meta => {
+      setSourcePanel(prev => prev?.chunkUri === chunkNode.uri
+        ? { ...prev, documentTitle: meta?.title, documentTags: meta?.tags }
         : prev
       );
     }).catch(() => {
-      // Metadata fetch failed — keep going with URI as title
-      setSourcePanel(prev => prev?.documentUri === documentUri
-        ? { ...prev, title: shortUri(documentUri) }
-        : prev
-      );
+      // Metadata not available — that's OK
     });
 
-    librarian.streamDocument(
-      documentUri,
-      (content, _chunkIndex, _totalChunks, complete) => {
-        setSourcePanel(prev => {
-          if (!prev || prev.documentUri !== documentUri) return prev;
-          // content is base64-encoded — decode it
-          let decoded: string;
-          try {
-            decoded = atob(content);
-          } catch {
-            decoded = content;
-          }
-          return {
-            ...prev,
-            text: prev.text + decoded,
-            loading: !complete,
-          };
+    // Fetch chunk metadata (charOffset, charLength) from KG, then stream
+    // the document and extract the chunk substring
+    (async () => {
+      try {
+        // Get chunk offset/length from KG
+        const chunkTriples = await api.triplesQuery(
+          { t: "i", i: chunkNode.uri },
+          undefined,
+          undefined,
+          20,
+          COLLECTION,
+        );
+
+        let charOffset: number | null = null;
+        let charLength: number | null = null;
+        for (const t of chunkTriples) {
+          const p = predIri(t);
+          if (p === TG_CHAR_OFFSET) charOffset = parseInt(objValue(t), 10);
+          if (p === TG_CHAR_LENGTH) charLength = parseInt(objValue(t), 10);
+        }
+
+        // Stream the document from the librarian
+        let fullText = "";
+        await new Promise<void>((resolve, reject) => {
+          librarian.streamDocument(
+            docNode.uri,
+            (content, _chunkIndex, _totalChunks, complete) => {
+              try {
+                fullText += atob(content);
+              } catch {
+                fullText += content;
+              }
+              if (complete) resolve();
+            },
+            (err) => reject(new Error(err)),
+          );
         });
-      },
-      (err) => {
-        setSourcePanel(prev => prev?.documentUri === documentUri
-          ? { ...prev, loading: false, error: err }
+
+        // Extract the chunk text
+        let chunkText: string;
+        if (charOffset != null && charLength != null) {
+          chunkText = fullText.slice(charOffset, charOffset + charLength);
+        } else {
+          // Fallback: show the full document if we can't find chunk bounds
+          chunkText = fullText;
+        }
+
+        setSourcePanel(prev => prev?.chunkUri === chunkNode.uri
+          ? { ...prev, chunkText, loading: false }
           : prev
         );
-      },
-    );
-  }, [socket, sourcePanel?.documentUri]);
+      } catch (err) {
+        setSourcePanel(prev => prev?.chunkUri === chunkNode.uri
+          ? { ...prev, loading: false, error: String(err) }
+          : prev
+        );
+      }
+    })();
+  }, [socket, sourcePanel?.chunkUri]);
 
   return (
     <div style={{ display: "flex", height: "calc(100vh - 110px)" }}>
@@ -975,15 +1017,34 @@ export function ExplainView() {
             display: "flex", flexDirection: "column",
             background: withGlow(palette.amber, 0.03),
           }}>
+            {/* Header with document metadata */}
             <div style={{
               padding: "8px 16px", borderBottom: `1px solid ${border.default}`,
               display: "flex", alignItems: "center", justifyContent: "space-between",
             }}>
-              <div style={{ fontSize: 11, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 600, color: palette.amber }}>
-                SOURCE DOCUMENT
-                {sourcePanel.title && (
-                  <span style={{ color: text.secondary, fontWeight: 400, marginLeft: 8 }}>
-                    {sourcePanel.title}
+              <div style={{ fontSize: 11, fontFamily: "'IBM Plex Mono', monospace" }}>
+                <span style={{ fontWeight: 600, color: palette.amber }}>SOURCE</span>
+                {sourcePanel.documentTitle ? (
+                  <span style={{ color: text.secondary, marginLeft: 8 }}>
+                    {sourcePanel.documentTitle}
+                  </span>
+                ) : (
+                  <span style={{ color: text.muted, marginLeft: 8 }}>
+                    {shortUri(sourcePanel.documentUri)}
+                  </span>
+                )}
+                {sourcePanel.documentTags && sourcePanel.documentTags.length > 0 && (
+                  <span style={{ marginLeft: 8 }}>
+                    {sourcePanel.documentTags.map((tag, i) => (
+                      <span key={i} style={{
+                        fontSize: 9, padding: "1px 6px", borderRadius: 3, marginLeft: 4,
+                        background: withGlow(palette.cyan, 0.1),
+                        border: `1px solid ${withGlow(palette.cyan, 0.2)}`,
+                        color: text.subtle,
+                      }}>
+                        {tag}
+                      </span>
+                    ))}
                   </span>
                 )}
               </div>
@@ -999,8 +1060,10 @@ export function ExplainView() {
                 ×
               </button>
             </div>
+
+            {/* Chunk text content */}
             <div style={{ flex: 1, padding: "12px 16px", overflowY: "auto" }}>
-              {sourcePanel.loading && !sourcePanel.text && (
+              {sourcePanel.loading && (
                 <div style={{ fontSize: 11, color: withGlow(palette.amber, 0.6), fontFamily: "'IBM Plex Mono', monospace" }}>
                   Loading source text...
                 </div>
@@ -1010,15 +1073,12 @@ export function ExplainView() {
                   {sourcePanel.error}
                 </div>
               )}
-              {sourcePanel.text && (
+              {sourcePanel.chunkText && (
                 <div style={{
-                  fontSize: 12, color: text.secondary, lineHeight: 1.6,
-                  whiteSpace: "pre-wrap", fontFamily: "'IBM Plex Mono', monospace",
+                  fontSize: 12, color: text.secondary, lineHeight: 1.7,
+                  whiteSpace: "pre-wrap",
                 }}>
-                  {sourcePanel.text}
-                  {sourcePanel.loading && (
-                    <span style={{ color: withGlow(palette.amber, 0.4) }}> ...</span>
-                  )}
+                  {sourcePanel.chunkText}
                 </div>
               )}
             </div>
@@ -1078,7 +1138,7 @@ function ExplainCard({ node, index, onEntityClick, onEdgeClick, onSourceClick }:
   index: number;
   onEntityClick?: (uri: string) => void;
   onEdgeClick?: (sel: EdgeSelection) => void;
-  onSourceClick?: (documentUri: string) => void;
+  onSourceClick?: (source: ProvenanceChain) => void;
 }) {
   const typeColor = eventTypeColor(node.eventType);
 
@@ -1133,7 +1193,7 @@ function EventDataView({ eventType, data, onEntityClick, onEdgeClick, onSourceCl
   data: EventData;
   onEntityClick?: (uri: string) => void;
   onEdgeClick?: (sel: EdgeSelection) => void;
-  onSourceClick?: (documentUri: string) => void;
+  onSourceClick?: (source: ProvenanceChain) => void;
 }) {
   const mono = { fontFamily: "'IBM Plex Mono', monospace" } as const;
 
@@ -1322,7 +1382,7 @@ function EventDataView({ eventType, data, onEntityClick, onEdgeClick, onSourceCl
 function EdgeSelectionView({ sel, onClick, onSourceClick }: {
   sel: EdgeSelection;
   onClick?: () => void;
-  onSourceClick?: (documentUri: string) => void;
+  onSourceClick?: (source: ProvenanceChain) => void;
 }) {
   const mono = { fontFamily: "'IBM Plex Mono', monospace" } as const;
 
@@ -1353,15 +1413,13 @@ function EdgeSelectionView({ sel, onClick, onSourceClick }: {
       {sel.sources && sel.sources.length > 0 && (
         <div style={{ marginTop: 3, display: "flex", flexWrap: "wrap", gap: 4 }}>
           {sel.sources.map((source, si) => {
-            // The last item in the chain is the root document
-            const docNode = source.chain[source.chain.length - 1];
             const chainLabel = source.chain.map(c => c.label).join(" → ");
             return (
               <span
                 key={si}
                 onClick={(e) => {
                   e.stopPropagation();
-                  onSourceClick?.(docNode.uri);
+                  onSourceClick?.(source);
                 }}
                 title={`View source: ${chainLabel}`}
                 style={{
