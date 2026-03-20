@@ -1,5 +1,6 @@
-import { useMemo } from "react";
-import { useTriples } from "@trustgraph/react-state";
+import { useState, useEffect, useMemo } from "react";
+import { useSocket } from "@trustgraph/react-provider";
+import type { Triple } from "@trustgraph/react-state";
 import type { Entity, Relationship, DomainKey, OntologyType } from "../types";
 import { COLLECTION } from "../config";
 import { domainColors } from "../theme";
@@ -41,19 +42,46 @@ function predicateToName(uri: string): string {
 }
 
 export function useGraphData(domain?: DomainKey) {
-  // Single query for all triples
-  const allTriples = useTriples({
-    limit: 1000,
-    collection: COLLECTION,
-  });
+  const socket = useSocket();
+  const [triples, setTriples] = useState<Triple[] | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isError, setIsError] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
 
-  const isLoading = allTriples.isLoading;
-  const isError = allTriples.isError;
-  const error = allTriples.error;
+  useEffect(() => {
+    let cancelled = false;
 
-  // Process all data from the single query
+    (async () => {
+      try {
+        setIsLoading(true);
+        setIsError(false);
+        setError(null);
+
+        const api = socket.flow("default");
+        const result = await api.triplesQuery(
+          undefined, undefined, undefined,
+          10000, COLLECTION, "",
+        );
+
+        if (!cancelled) {
+          setTriples(result);
+          setIsLoading(false);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setIsError(true);
+          setError(err instanceof Error ? err : new Error(String(err)));
+          setIsLoading(false);
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [socket]);
+
+  // Process all data from the query
   const { entities, relationships, ontology, propertyLabels } = useMemo(() => {
-    if (isLoading || !allTriples.triples) {
+    if (isLoading || !triples) {
       return { entities: [], relationships: [], ontology: undefined, propertyLabels: {} };
     }
 
@@ -63,7 +91,7 @@ export function useGraphData(domain?: DomainKey) {
     const owlClasses = new Set<string>();
     const propertyUris = new Set<string>();
 
-    for (const triple of allTriples.triples) {
+    for (const triple of triples) {
       const subjectUri = getTermValue(triple.s);
       const predicate = getTermValue(triple.p);
       const objectUri = getTermValue(triple.o);
@@ -113,7 +141,7 @@ export function useGraphData(domain?: DomainKey) {
     const entityProps = new Map<string, Record<string, string | number>>();
 
     // Collect entity properties first
-    for (const triple of allTriples.triples) {
+    for (const triple of triples) {
       const subjectUri = getTermValue(triple.s);
       const predicate = getTermValue(triple.p);
       const value = getTermValue(triple.o);
@@ -130,7 +158,7 @@ export function useGraphData(domain?: DomainKey) {
     }
 
     // Find entities by type (instances of OWL classes)
-    for (const triple of allTriples.triples) {
+    for (const triple of triples) {
       const subjectUri = getTermValue(triple.s);
       const predicate = getTermValue(triple.p);
       const objectUri = getTermValue(triple.o);
@@ -157,7 +185,7 @@ export function useGraphData(domain?: DomainKey) {
     const relationships: Relationship[] = [];
     const entityUris = new Set(entityMap.keys());
 
-    for (const triple of allTriples.triples) {
+    for (const triple of triples) {
       const subjectUri = getTermValue(triple.s);
       const predicate = getTermValue(triple.p);
       const objectUri = getTermValue(triple.o);
@@ -201,7 +229,7 @@ export function useGraphData(domain?: DomainKey) {
     }
 
     return { entities, relationships, ontology, propertyLabels };
-  }, [isLoading, allTriples.triples, domain]);
+  }, [isLoading, triples, domain]);
 
   return {
     entities,
