@@ -785,11 +785,8 @@ export function ExplainView() {
     const docNode = source.chain[source.chain.length - 1];
     if (!chunkNode || !docNode) return;
 
-    // Toggle off if clicking same chunk
-    if (sourcePanel?.chunkUri === chunkNode.uri) {
-      setSourcePanel(null);
-      return;
-    }
+    // Same chunk — ignore (use the × button to close)
+    if (sourcePanel?.chunkUri === chunkNode.uri) return;
 
     setSourcePanel({
       chunkUri: chunkNode.uri,
