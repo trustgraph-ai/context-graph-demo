@@ -25,8 +25,6 @@ const TG_ARGUMENTS = TG + "arguments";
 const TG_THOUGHT = TG + "thought";
 const TG_OBSERVATION = TG + "observation";
 const TG_DOCUMENT = TG + "document";
-const TG_CHAR_OFFSET = TG + "charOffset";
-const TG_CHAR_LENGTH = TG + "charLength";
 const RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
 const PROV = "http://www.w3.org/ns/prov#";
 const PROV_STARTED_AT_TIME = PROV + "startedAtTime";
@@ -799,10 +797,9 @@ export function ExplainView() {
       loading: true,
     });
 
-    const api = socket.flow("default");
     const librarian = socket.librarian();
 
-    // Fetch document metadata from librarian
+    // Fetch parent document metadata (title, tags) from librarian
     librarian.getDocumentMetadata(docNode.uri).then(meta => {
       setSourcePanel(prev => prev?.chunkUri === chunkNode.uri
         ? { ...prev, documentTitle: meta?.title, documentTags: meta?.tags }
@@ -812,64 +809,30 @@ export function ExplainView() {
       // Metadata not available — that's OK
     });
 
-    // Fetch chunk metadata (charOffset, charLength) from KG, then stream
-    // the document and extract the chunk substring
-    (async () => {
-      try {
-        // Get chunk offset/length from KG
-        const chunkTriples = await api.triplesQuery(
-          { t: "i", i: chunkNode.uri },
-          undefined,
-          undefined,
-          20,
-          COLLECTION,
-        );
-
-        let charOffset: number | null = null;
-        let charLength: number | null = null;
-        for (const t of chunkTriples) {
-          const p = predIri(t);
-          if (p === TG_CHAR_OFFSET) charOffset = parseInt(objValue(t), 10);
-          if (p === TG_CHAR_LENGTH) charLength = parseInt(objValue(t), 10);
+    // The chunk URI is itself a document ID in the librarian — stream it directly
+    let chunkText = "";
+    librarian.streamDocument(
+      chunkNode.uri,
+      (content, _chunkIndex, _totalChunks, complete) => {
+        try {
+          chunkText += atob(content);
+        } catch {
+          chunkText += content;
         }
-
-        // Stream the document from the librarian
-        let fullText = "";
-        await new Promise<void>((resolve, reject) => {
-          librarian.streamDocument(
-            docNode.uri,
-            (content, _chunkIndex, _totalChunks, complete) => {
-              try {
-                fullText += atob(content);
-              } catch {
-                fullText += content;
-              }
-              if (complete) resolve();
-            },
-            (err) => reject(new Error(err)),
+        if (complete) {
+          setSourcePanel(prev => prev?.chunkUri === chunkNode.uri
+            ? { ...prev, chunkText, loading: false }
+            : prev
           );
-        });
-
-        // Extract the chunk text
-        let chunkText: string;
-        if (charOffset != null && charLength != null) {
-          chunkText = fullText.slice(charOffset, charOffset + charLength);
-        } else {
-          // Fallback: show the full document if we can't find chunk bounds
-          chunkText = fullText;
         }
-
+      },
+      (err) => {
         setSourcePanel(prev => prev?.chunkUri === chunkNode.uri
-          ? { ...prev, chunkText, loading: false }
+          ? { ...prev, loading: false, error: err }
           : prev
         );
-      } catch (err) {
-        setSourcePanel(prev => prev?.chunkUri === chunkNode.uri
-          ? { ...prev, loading: false, error: String(err) }
-          : prev
-        );
-      }
-    })();
+      },
+    );
   }, [socket, sourcePanel?.chunkUri]);
 
   return (
