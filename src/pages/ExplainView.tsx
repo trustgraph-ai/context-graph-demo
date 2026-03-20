@@ -87,6 +87,14 @@ interface ReflectionData {
 
 type EventData = QuestionData | GroundingData | ExplorationData | FocusData | SynthesisData | AnalysisData | ConclusionData | ReflectionData;
 
+interface SourcePanelState {
+  documentUri: string;
+  title?: string;
+  text: string;
+  loading: boolean;
+  error?: string;
+}
+
 interface ExplainNode {
   explainId: string;
   explainGraph: string;
@@ -518,6 +526,7 @@ export function ExplainView() {
   const [error, setError] = useState<string | null>(null);
   const [highlightedNodeIds, setHighlightedNodeIds] = useState<string[]>([]);
   const [highlightedEdgeIds, setHighlightedEdgeIds] = useState<string[]>([]);
+  const [sourcePanel, setSourcePanel] = useState<SourcePanelState | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const explainScrollRef = useRef<HTMLDivElement>(null);
   const labelCacheRef = useRef(new Map<string, string>());
@@ -619,6 +628,7 @@ export function ExplainView() {
     setExplainNodes([]);
     setHighlightedNodeIds([]);
     setHighlightedEdgeIds([]);
+    setSourcePanel(null);
     setError(null);
     setInput("");
     labelCacheRef.current.clear();
@@ -767,6 +777,59 @@ export function ExplainView() {
     setHighlightedEdgeIds([sel.edgeUri]);
   }, []);
 
+  const handleSourceClick = useCallback((documentUri: string) => {
+    // If already showing this document, close it
+    if (sourcePanel?.documentUri === documentUri) {
+      setSourcePanel(null);
+      return;
+    }
+
+    setSourcePanel({ documentUri, text: "", loading: true });
+
+    const librarian = socket.librarian();
+
+    // Fetch metadata and stream document content in parallel
+    librarian.getDocumentMetadata(documentUri).then(meta => {
+      setSourcePanel(prev => prev?.documentUri === documentUri
+        ? { ...prev, title: meta?.title || shortUri(documentUri) }
+        : prev
+      );
+    }).catch(() => {
+      // Metadata fetch failed — keep going with URI as title
+      setSourcePanel(prev => prev?.documentUri === documentUri
+        ? { ...prev, title: shortUri(documentUri) }
+        : prev
+      );
+    });
+
+    librarian.streamDocument(
+      documentUri,
+      (content, _chunkIndex, _totalChunks, complete) => {
+        setSourcePanel(prev => {
+          if (!prev || prev.documentUri !== documentUri) return prev;
+          // content is base64-encoded — decode it
+          let decoded: string;
+          try {
+            decoded = atob(content);
+          } catch {
+            decoded = content;
+          }
+          return {
+            ...prev,
+            text: prev.text + decoded,
+            loading: !complete,
+          };
+        });
+      },
+      (err) => {
+        setSourcePanel(prev => prev?.documentUri === documentUri
+          ? { ...prev, loading: false, error: err }
+          : prev
+        );
+      },
+    );
+  }, [socket, sourcePanel?.documentUri]);
+
   return (
     <div style={{ display: "flex", height: "calc(100vh - 110px)" }}>
       {/* LHS: Query + Response */}
@@ -905,6 +968,63 @@ export function ExplainView() {
           />
         </div>
 
+        {/* Source text panel — shown when a provenance link is clicked */}
+        {sourcePanel && (
+          <div style={{
+            maxHeight: "35%", borderBottom: `1px solid ${border.default}`,
+            display: "flex", flexDirection: "column",
+            background: withGlow(palette.amber, 0.03),
+          }}>
+            <div style={{
+              padding: "8px 16px", borderBottom: `1px solid ${border.default}`,
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+            }}>
+              <div style={{ fontSize: 11, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 600, color: palette.amber }}>
+                SOURCE DOCUMENT
+                {sourcePanel.title && (
+                  <span style={{ color: text.secondary, fontWeight: 400, marginLeft: 8 }}>
+                    {sourcePanel.title}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => setSourcePanel(null)}
+                style={{
+                  background: "none", border: "none", cursor: "pointer",
+                  color: text.muted, fontSize: 16, padding: "0 4px",
+                  lineHeight: 1,
+                }}
+                title="Close"
+              >
+                ×
+              </button>
+            </div>
+            <div style={{ flex: 1, padding: "12px 16px", overflowY: "auto" }}>
+              {sourcePanel.loading && !sourcePanel.text && (
+                <div style={{ fontSize: 11, color: withGlow(palette.amber, 0.6), fontFamily: "'IBM Plex Mono', monospace" }}>
+                  Loading source text...
+                </div>
+              )}
+              {sourcePanel.error && (
+                <div style={{ fontSize: 11, color: semantic.error, fontFamily: "'IBM Plex Mono', monospace" }}>
+                  {sourcePanel.error}
+                </div>
+              )}
+              {sourcePanel.text && (
+                <div style={{
+                  fontSize: 12, color: text.secondary, lineHeight: 1.6,
+                  whiteSpace: "pre-wrap", fontFamily: "'IBM Plex Mono', monospace",
+                }}>
+                  {sourcePanel.text}
+                  {sourcePanel.loading && (
+                    <span style={{ color: withGlow(palette.amber, 0.4) }}> ...</span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Event cards — bottom half */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
           <div style={{ padding: "12px 20px", borderBottom: `1px solid ${border.default}` }}>
@@ -939,6 +1059,7 @@ export function ExplainView() {
                   index={idx}
                   onEntityClick={handleEntityClick}
                   onEdgeClick={handleEdgeClick}
+                  onSourceClick={handleSourceClick}
                 />
               ))}
             </div>
@@ -952,11 +1073,12 @@ export function ExplainView() {
 
 // ── ExplainCard ─────────────────────────────────────────────────────
 
-function ExplainCard({ node, index, onEntityClick, onEdgeClick }: {
+function ExplainCard({ node, index, onEntityClick, onEdgeClick, onSourceClick }: {
   node: ExplainNode;
   index: number;
   onEntityClick?: (uri: string) => void;
   onEdgeClick?: (sel: EdgeSelection) => void;
+  onSourceClick?: (documentUri: string) => void;
 }) {
   const typeColor = eventTypeColor(node.eventType);
 
@@ -993,6 +1115,7 @@ function ExplainCard({ node, index, onEntityClick, onEdgeClick }: {
           data={node.data}
           onEntityClick={onEntityClick}
           onEdgeClick={onEdgeClick}
+          onSourceClick={onSourceClick}
         />
       )}
 
@@ -1005,11 +1128,12 @@ function ExplainCard({ node, index, onEntityClick, onEdgeClick }: {
 
 // ── EventDataView ───────────────────────────────────────────────────
 
-function EventDataView({ eventType, data, onEntityClick, onEdgeClick }: {
+function EventDataView({ eventType, data, onEntityClick, onEdgeClick, onSourceClick }: {
   eventType: string;
   data: EventData;
   onEntityClick?: (uri: string) => void;
   onEdgeClick?: (sel: EdgeSelection) => void;
+  onSourceClick?: (documentUri: string) => void;
 }) {
   const mono = { fontFamily: "'IBM Plex Mono', monospace" } as const;
 
@@ -1114,7 +1238,7 @@ function EventDataView({ eventType, data, onEntityClick, onEdgeClick }: {
                 Focused on {d.edgeSelections.length} edge{d.edgeSelections.length !== 1 ? "s" : ""}
               </div>
               {d.edgeSelections.map((sel, i) => (
-                <EdgeSelectionView key={sel.edgeUri || i} sel={sel} onClick={() => onEdgeClick?.(sel)} />
+                <EdgeSelectionView key={sel.edgeUri || i} sel={sel} onClick={() => onEdgeClick?.(sel)} onSourceClick={onSourceClick} />
               ))}
             </>
           )}
@@ -1195,7 +1319,11 @@ function EventDataView({ eventType, data, onEntityClick, onEdgeClick }: {
 
 // ── EdgeSelectionView ───────────────────────────────────────────────
 
-function EdgeSelectionView({ sel, onClick }: { sel: EdgeSelection; onClick?: () => void }) {
+function EdgeSelectionView({ sel, onClick, onSourceClick }: {
+  sel: EdgeSelection;
+  onClick?: () => void;
+  onSourceClick?: (documentUri: string) => void;
+}) {
   const mono = { fontFamily: "'IBM Plex Mono', monospace" } as const;
 
   return (
@@ -1210,7 +1338,7 @@ function EdgeSelectionView({ sel, onClick }: { sel: EdgeSelection; onClick?: () 
       onMouseEnter={e => { if (onClick) e.currentTarget.style.background = withGlow(palette.purple, 0.08); }}
       onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
     >
-      {/* Edge triple + source on one line */}
+      {/* Edge triple */}
       {sel.edgeLabels && (
         <div style={{ fontSize: 11, lineHeight: 1.5, ...mono }}>
           <span style={{ color: palette.pink }}>{sel.edgeLabels.s}</span>
@@ -1218,11 +1346,39 @@ function EdgeSelectionView({ sel, onClick }: { sel: EdgeSelection; onClick?: () 
           <span style={{ color: palette.cyan }}>{sel.edgeLabels.p}</span>
           <span style={{ color: text.faint }}> → </span>
           <span style={{ color: palette.pink }}>{sel.edgeLabels.o}</span>
-          {sel.sources && sel.sources.length > 0 && (
-            <span style={{ color: text.hint, fontSize: 10 }}>
-              {" "}[{sel.sources.map(s => s.chain.map(c => c.label).join(" → ")).join(", ")}]
-            </span>
-          )}
+        </div>
+      )}
+
+      {/* Provenance sources — clickable to view source text */}
+      {sel.sources && sel.sources.length > 0 && (
+        <div style={{ marginTop: 3, display: "flex", flexWrap: "wrap", gap: 4 }}>
+          {sel.sources.map((source, si) => {
+            // The last item in the chain is the root document
+            const docNode = source.chain[source.chain.length - 1];
+            const chainLabel = source.chain.map(c => c.label).join(" → ");
+            return (
+              <span
+                key={si}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSourceClick?.(docNode.uri);
+                }}
+                title={`View source: ${chainLabel}`}
+                style={{
+                  fontSize: 10, padding: "2px 7px", borderRadius: 4,
+                  background: withGlow(palette.amber, 0.08),
+                  border: `1px solid ${withGlow(palette.amber, 0.2)}`,
+                  color: text.hint, ...mono,
+                  cursor: onSourceClick ? "pointer" : "default",
+                  transition: "all 0.15s ease",
+                }}
+                onMouseEnter={e => { if (onSourceClick) { e.currentTarget.style.background = withGlow(palette.amber, 0.2); e.currentTarget.style.color = palette.amber; } }}
+                onMouseLeave={e => { e.currentTarget.style.background = withGlow(palette.amber, 0.08); e.currentTarget.style.color = text.hint; }}
+              >
+                {chainLabel}
+              </span>
+            );
+          })}
         </div>
       )}
 
